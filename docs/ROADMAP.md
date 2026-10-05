@@ -50,6 +50,14 @@ weighted by transparent work signals. Duplicates become family-specific Essence.
 
 ### New product loop shipped
 
+- `/flow-demo` walks the first-run flow without OAuth credentials or a
+  repository: it drives the real engine functions (`advanceEncounter`,
+  `resolveCompanionProgression`, `resolveStage`, `resolveActivityLog`) with
+  simulated merged-pull-request events and shows the resulting stage, XP,
+  encounter meter, and activity log. It also states plainly that there is no
+  evolution animation: stages 1-3 are PokeAPI idle GIFs and stage 4 is a static
+  PNG, so a stage change is an image swap, not a morph.
+
 - The activity log lists what each companion earned, from which repository or
   folder, and when. It is a read model over the ledger (no new storage), scoped
   per active companion. Rows a daily cap rejected are listed with zero XP and
