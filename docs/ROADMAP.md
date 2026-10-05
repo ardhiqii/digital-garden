@@ -50,6 +50,13 @@ weighted by transparent work signals. Duplicates become family-specific Essence.
 
 ### New product loop shipped
 
+- The activity log lists what each companion earned, from which repository or
+  folder, and when. It is a read model over the ledger (no new storage), scoped
+  per active companion. Rows a daily cap rejected are listed with zero XP and
+  the reason, because a log that hides its own exclusions makes a capped day
+  look like a broken feature. Repository names are recorded as identifiers on
+  GitHub event metadata; note text, titles, and paths remain unrecorded.
+
 - Guest onboarding creates an immediate local starter without authentication.
 - The `/write` route now exposes starter selection, recoverability warning, and
   a local activity panel.

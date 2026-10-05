@@ -16,6 +16,8 @@ import {
 export interface GitHubCommitRecord {
   readonly id: string
   readonly repositoryId: string
+  /** Owner/name, for the activity log. Identifier, never content. */
+  readonly repositoryName?: string
   readonly occurredAt: string
   readonly additions?: number
   readonly deletions?: number
@@ -31,6 +33,8 @@ export interface GitHubCommitRecord {
 export interface GitHubMergedPullRequestRecord {
   readonly id: string
   readonly repositoryId: string
+  /** Owner/name, for the activity log. Identifier, never content. */
+  readonly repositoryName?: string
   readonly number?: number
   readonly mergedAt: string
   readonly headSha?: string
@@ -40,6 +44,8 @@ export interface GitHubMergedPullRequestRecord {
 export interface GitHubReleaseRecord {
   readonly id: string
   readonly repositoryId: string
+  /** Owner/name, for the activity log. Identifier, never content. */
+  readonly repositoryName?: string
   readonly tagName?: string
   readonly publishedAt: string
   readonly draft?: boolean
@@ -49,6 +55,8 @@ export interface GitHubReleaseRecord {
 export interface GitHubLinkedIssueRecord {
   readonly id: string
   readonly repositoryId: string
+  /** Owner/name, for the activity log. Identifier, never content. */
+  readonly repositoryName?: string
   readonly number?: number
   readonly closedAt: string
   readonly linkedPullRequestId?: string
@@ -61,6 +69,8 @@ export interface GitHubLinkedIssueRecord {
 export interface GitHubCiCheckRecord {
   readonly id: string
   readonly repositoryId: string
+  /** Owner/name, for the activity log. Identifier, never content. */
+  readonly repositoryName?: string
   readonly completedAt: string
   readonly conclusion?: string
   readonly status?: string
@@ -349,6 +359,7 @@ export function normalizeGitHubEvents(
         pullRequest.mergedAt,
         {
           repositoryId: pullRequest.repositoryId,
+          ...(pullRequest.repositoryName ? { repositoryName: pullRequest.repositoryName } : {}),
           ...(pullRequest.number === undefined ? {} : { number: pullRequest.number }),
         },
       ),
@@ -369,6 +380,7 @@ export function normalizeGitHubEvents(
         release.publishedAt,
         {
           repositoryId: release.repositoryId,
+          ...(release.repositoryName ? { repositoryName: release.repositoryName } : {}),
           ...(release.tagName ? { tagName: release.tagName } : {}),
         },
       ),
@@ -409,6 +421,7 @@ export function normalizeGitHubEvents(
         issue.closedAt,
         {
           repositoryId: issue.repositoryId,
+          ...(issue.repositoryName ? { repositoryName: issue.repositoryName } : {}),
           ...(issue.number === undefined ? {} : { number: issue.number }),
           ...(linkedPullRequest ? { linkedPullRequestId: linkedPullRequest.id } : {}),
         },
@@ -451,6 +464,7 @@ export function normalizeGitHubEvents(
         check.completedAt,
         {
           repositoryId: check.repositoryId,
+          ...(check.repositoryName ? { repositoryName: check.repositoryName } : {}),
           pullRequestId: pullRequest.id,
           ...(check.name ? { checkName: check.name } : {}),
         },
