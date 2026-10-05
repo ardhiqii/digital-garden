@@ -294,3 +294,92 @@ describe('normalizeGitHubEvents', () => {
     )
   })
 })
+
+describe('repository name in event metadata', () => {
+  it('records the repository name on a merged pull request, for the activity log', () => {
+    const events = normalize({
+      mergedPullRequests: [
+        {
+          id: 'pr-1',
+          repositoryId: 'repo-99',
+          repositoryName: 'ardhiqii/terrarium',
+          number: 44,
+          mergedAt: '2026-10-01T10:00:00Z',
+        },
+      ],
+    })
+
+    const merged = events.find((event) => event.category === 'merged-pull-request')
+    expect(merged?.metadata?.repositoryName).toBe('ardhiqii/terrarium')
+    expect(merged?.metadata?.repositoryId).toBe('repo-99')
+  })
+
+  it('omits the name rather than emitting an empty one', () => {
+    const events = normalize({
+      mergedPullRequests: [
+        {
+          id: 'pr-2',
+          repositoryId: 'repo-99',
+          mergedAt: '2026-10-01T10:00:00Z',
+        },
+      ],
+    })
+
+    const merged = events.find((event) => event.category === 'merged-pull-request')
+    expect(merged?.metadata).not.toHaveProperty('repositoryName')
+  })
+
+  it('carries the name onto releases, issues, and green builds', () => {
+    const events = normalize({
+      releases: [
+        {
+          id: 'rel-1',
+          repositoryId: 'repo-1',
+          repositoryName: 'ardhiqii/terrarium',
+          tagName: 'v1.0.0',
+          publishedAt: '2026-10-01T10:00:00Z',
+          published: true,
+        },
+      ],
+      linkedIssues: [
+        {
+          id: 'issue-1',
+          repositoryId: 'repo-1',
+          repositoryName: 'ardhiqii/terrarium',
+          number: 7,
+          closedAt: '2026-10-01T11:00:00Z',
+          linkedPullRequestId: 'pr-1',
+        },
+      ],
+      mergedPullRequests: [
+        {
+          id: 'pr-1',
+          repositoryId: 'repo-1',
+          repositoryName: 'ardhiqii/terrarium',
+          number: 1,
+          mergedAt: '2026-10-01T09:00:00Z',
+        },
+      ],
+      ciChecks: [
+        {
+          id: 'check-1',
+          repositoryId: 'repo-1',
+          repositoryName: 'ardhiqii/terrarium',
+          completedAt: '2026-10-01T09:30:00Z',
+          conclusion: 'success',
+          pullRequestId: 'pr-1',
+        },
+      ],
+    })
+
+    for (const category of [
+      'merged-pull-request',
+      'published-release',
+      'closed-linked-issue',
+      'successful-ci',
+    ] as const) {
+      const event = events.find((candidate) => candidate.category === category)
+      expect(event?.metadata?.repositoryName).toBe('ardhiqii/terrarium')
+    }
+  })
+})
