@@ -2,6 +2,7 @@
 
 import { DEFAULT_ENCOUNTER_CONFIG } from '@/lib/game/encounters'
 import type { ProductState } from '@/lib/game/product-state'
+import { titleForState } from '@/lib/game/achievements'
 import { displayCompanionName } from './display-name'
 
 export interface ProductActivityPanelProps {
@@ -47,6 +48,7 @@ export function ProductActivityPanel({
     ? displayCompanionName(activeCompanion.companionId)
     : 'No active companion'
   const progressionName = progression?.step.name ?? 'Not started'
+  const title = titleForState(state)
 
   return (
     <section
@@ -76,6 +78,13 @@ export function ProductActivityPanel({
           Active companion
         </p>
       </div>
+
+      <p className="font-data mt-2 text-xs" style={{ color: 'var(--ink-muted)' }}>
+        <span style={{ color: 'var(--accent)' }}>{title.title.name}</span>
+        {title.nextTitle
+          ? ` · ${title.xpIntoTier.toLocaleString()} / ${title.xpForNextTier?.toLocaleString()} xp to ${title.nextTitle.name}`
+          : ' · highest rank reached'}
+      </p>
 
       <dl className="mt-6 grid gap-4 sm:grid-cols-3">
         <div>
