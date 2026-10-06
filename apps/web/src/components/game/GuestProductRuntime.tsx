@@ -201,6 +201,9 @@ export function GuestProductRuntime() {
         companionId: profile.activeCompanionId,
         previous,
         current: detail.files,
+        // The scan's own time, from the clock. Daily caps bucket by this, never
+        // by a file's mtime, which the user can set.
+        now: new Date().toISOString(),
       })
       previousScans.current.set(detail.sourceId, detail.files)
       if (normalized.length === 0) {
