@@ -20,6 +20,7 @@
 import {
   XP_BY_EVENT_CATEGORY,
   acceptedLedgerEvents,
+  explainLedgerAcceptance,
   type CompanionId,
   type EventCategory,
   type EventLedger,
@@ -94,16 +95,21 @@ function sourceLabelFor(event: NormalizedEvent): string {
 }
 
 /**
- * Builds the log newest-first. Events that survived their cap earn their
- * category's XP; the rest are listed with 0 and a reason.
+ * Builds the log newest-first. Events that survived every cap earn their
+ * category's XP; the rest are listed with 0 and the reason they did not.
+ *
+ * The reason comes from the ledger itself rather than being assumed, because
+ * there are now two distinguishable ways an event earns nothing: it lost its
+ * own source's daily cap, or it was fine but the day's global budget was already
+ * spent. Telling a user "beyond the daily limit for this source" when the real
+ * cause was the budget would be a lie about how their own economy works.
  */
 export function resolveActivityLog(
   ledger: EventLedger,
   options: ActivityLogOptions = {},
 ): ActivityLog {
-  const acceptedIds = new Set(
-    acceptedLedgerEvents(ledger).map((event) => event.eventId),
-  )
+  const { accepted, rejected } = explainLedgerAcceptance(ledger)
+  const acceptedIds = new Set(accepted.map((event) => event.eventId))
 
   // Deduplicate the same way the ledger does, so a replayed delivery does not
   // appear twice in the log: first write wins.
@@ -120,6 +126,7 @@ export function resolveActivityLog(
 
     const counted = acceptedIds.has(event.eventId)
     const xp = counted ? XP_BY_EVENT_CATEGORY[event.category] : 0
+    const reason = rejected.get(event.eventId)
 
     entries.push({
       eventId: event.eventId,
@@ -132,7 +139,14 @@ export function resolveActivityLog(
       provenance: event.provenance,
       xp,
       counted,
-      ...(counted ? {} : { skipReason: 'Beyond the daily limit for this source' }),
+      ...(counted
+        ? {}
+        : {
+            skipReason:
+              reason === 'daily-budget'
+                ? "Beyond today's overall xp budget"
+                : 'Beyond the daily limit for this source',
+          }),
     })
   }
 

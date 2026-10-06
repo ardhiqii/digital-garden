@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import type { EventLedger } from '@/lib/game/events'
+import { GLOBAL_DAILY_XP_BUDGET } from '@/lib/game/events'
 import { resolveActivityLog } from '@/lib/game/activity-log'
 import { displayCompanionName } from './display-name'
 
@@ -50,9 +51,41 @@ export function ActivityLogList({ ledger, companionId, limit = 12 }: ActivityLog
 
   const visible = log.entries.slice(0, limit)
   const hidden = log.entries.length - visible.length
+  // The budget meter, so a user sees WHY they stopped earning without having to
+  // find a rejected row and read the reason. Only shown once it is close enough
+  // to matter: the honest ceiling for both current sources is well under it, so
+  // showing "30 / 250" every day would read as noise.
+  const budgetUsed = log.totalXp
+  const budgetPct = Math.min(1, budgetUsed / GLOBAL_DAILY_XP_BUDGET)
+  const showBudget = budgetPct >= 0.5
 
   return (
     <div className="font-data text-xs">
+      {showBudget ? (
+        <div className="mb-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <span style={{ color: 'var(--ink-muted)' }}>Today's xp budget</span>
+            <span style={{ color: 'var(--ink-muted)' }}>
+              {budgetUsed} / {GLOBAL_DAILY_XP_BUDGET}
+            </span>
+          </div>
+          <div
+            className="mt-1.5 h-1.5 w-full"
+            style={{ background: 'var(--rule)' }}
+            role="progressbar"
+            aria-label="Today's xp budget"
+            aria-valuenow={Math.round(budgetPct * 100)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuetext={`${Math.round(budgetPct * 100)}%`}
+          >
+            <div
+              className="h-full"
+              style={{ width: `${budgetPct * 100}%`, background: 'var(--accent)' }}
+            />
+          </div>
+        </div>
+      ) : null}
       <ul className="flex flex-col">
         {visible.map((entry) => (
           <li
