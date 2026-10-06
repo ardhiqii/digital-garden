@@ -482,13 +482,37 @@ outcomes, not raw volume.
 |---|---:|---|
 | Qualifying active day | 10 | Once per source per calendar day. |
 | Work session | 10 | Maximum two sessions per source per day. |
-| New note | 25 | Once per note after the source baseline. |
-| 100 new words | 5 | Count net new body words, not repeated scans. |
-| New resolved wikilink | 3 | Only when the target exists. |
+| New note | 25 | Once per note after the source baseline. Maximum three new notes per source per calendar day. |
+| 100 new words | 5 | Count net new body words, not repeated scans. Maximum ten buckets (1,000 words) per day across all mounted folders. |
+| New resolved wikilink | 3 | Only when the target exists. Maximum twelve per day across all mounted folders. |
 | Merged pull request | 25 | One event per merged PR. |
 | Published release | 40 | One event per release. |
 | Closed linked issue | 10 | Only when linked to the project or PR. |
 | Successful CI on merged PR | 10 | One qualifying success per merged PR. |
+
+**Every category is capped.** The activity categories are capped because a day
+is one day. The content categories are capped because a scan is repeatable: a
+file can be padded, rescanned, padded again, and each pass changes the content
+hash, so "net new words" alone is not a bound. Without content caps the note
+source paid without limit while the GitHub source was capped at 30 XP/day
+(10 active day + two 10 XP sessions), which made the two sources incomparable
+and made padding a file out-earn a month of real commits.
+
+The caps are deliberately hardened against the inputs a user controls:
+
+- **The day comes from the scan clock, never from a file.** File modification
+  time is settable (`touch -t`, archive extraction, a crafted mount), so
+  bucketing by it let a single scan spread its work across a year of days and
+  earn a year of allowance at once. A scan is charged to the real day it ran.
+- **The allowance is not per folder.** Keying the cap by the mounted folder's
+  name meant copying a vault, or renaming it, minted a fresh allowance for
+  identical content. Every mounted folder now shares one daily budget.
+- **`new-note` is keyed to the note's content, not its path,** so moving or
+  renaming a file does not re-earn the bonus for a note that already paid.
+
+These caps apply per **day**, across all mounted folders. Reaching a cap is
+visible: the activity log lists the events a cap rejected with zero XP and the
+reason.
 
 Empty commits, unchanged saves, refreshes, repeated scans, and duplicate webhook
 deliveries award zero additional XP. Tiny commits may be grouped into one work
