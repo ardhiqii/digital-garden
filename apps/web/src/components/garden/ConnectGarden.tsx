@@ -54,6 +54,7 @@ import Sprite from '@/components/game/Sprite'
 import RemoteSprite from '@/components/game/RemoteSprite'
 import { XpBar } from '@/components/game/XpBar'
 import { XpLedger } from '@/components/game/XpLedger'
+import { dispatchMarkdownScanDetail } from '@/lib/garden-fs/scan-dispatch'
 
 const connection = new FsaGardenConnection()
 
@@ -187,18 +188,7 @@ async function computeFromSource(
     // Send only an in-process browser event to the local product runtime.
     // The runtime derives XP and persists the event ledger locally; no note
     // text is sent through fetch or to the server.
-    window.dispatchEvent(
-      new CustomEvent('terrarium:markdown-scan', {
-        detail: {
-          sourceId: `mounted-markdown:${source.name}`,
-          files: files.map((file) => ({
-            path: file.name,
-            content: file.content,
-            modifiedAt: new Date(file.lastModified ?? Date.now()).toISOString(),
-          })),
-        },
-      }),
-    )
+    dispatchMarkdownScanDetail(source.name, files)
 
     if (files.length === 0) {
       onPhase({
@@ -279,6 +269,51 @@ export function ConnectGarden() {
   // you check occasionally rather than something that should be competing
   // with the note for vertical space.
   const [statsOpen, setStatsOpen] = useState(false)
+  // Re-reading a folder is a user-visible action with its own duration, so it
+  // gets its own flag rather than reusing a phase: the workspace must stay
+  // usable while a rescan runs.
+  const [rescanning, setRescanning] = useState(false)
+  // A failed rescan must not look like a successful one. Shown in the status
+  // strip rather than replacing the workspace, so the user keeps their editor.
+  const [rescanError, setRescanError] = useState<string | null>(null)
+
+  /**
+   * Re-read the mounted folder and announce it, without a page reload.
+   *
+   * The scan on mount is the only automatic one, and the built-in editor only
+   * raises its own scan after a save. So a note written in another app (an
+   * editor, a sync client, Obsidian itself) produced no event until the user
+   * happened to reload. This is the control for that, and it is also the
+   * honest affordance for "activity is detected on read, not on write".
+   */
+  const handleRescan = useCallback(async () => {
+    if (!source || rescanning) return
+    setRescanning(true)
+    setRescanError(null)
+    try {
+      const files = await source.list()
+      dispatchMarkdownScanDetail(source.name, files)
+      // Update the counters the same way the mount path does, so the header
+      // cannot disagree with what was just read.
+      const items = parseGardenFiles(files)
+      const stats = getGardenStatsFrom(items)
+      setPhase((current) =>
+        current.kind === 'ready'
+          ? {
+              ...current,
+              noteCount: items.length,
+              totalFiles: files.length,
+              state: composeCreatureState(stats, null, { includeItems: false, isOwner: false }),
+              clusters: detectClustersFrom(items),
+            }
+          : current,
+      )
+    } catch (e) {
+      setRescanError(e instanceof Error ? e.message : 'Could not re-read this folder.')
+    } finally {
+      setRescanning(false)
+    }
+  }, [source, rescanning])
 
   useEffect(() => {
     let cancelled = false
@@ -518,8 +553,21 @@ export function ConnectGarden() {
           <span className="ml-2">
             {phase.totalFiles} markdown {phase.totalFiles === 1 ? 'file' : 'files'}
           </span>
+          {rescanError ? (
+            <span className="ml-2" style={{ color: 'var(--accent)' }}>
+              {rescanError}
+            </span>
+          ) : null}
         </p>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleRescan}
+            disabled={rescanning}
+            className="font-ui text-xs font-medium px-2 py-1 border transition-opacity hover:opacity-80 disabled:opacity-40"
+            style={{ borderColor: 'var(--rule)', color: 'var(--ink-muted)' }}
+          >
+            {rescanning ? 'Scanning…' : 'Rescan'}
+          </button>
           <button
             onClick={() => setStatsOpen((open) => !open)}
             aria-expanded={statsOpen}

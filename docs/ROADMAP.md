@@ -50,6 +50,17 @@ weighted by transparent work signals. Duplicates become family-specific Essence.
 
 ### New product loop shipped
 
+- The mounted-folder source raises its scan in one shared place
+  (`lib/garden-fs/scan-dispatch.ts`), and the built-in editor now raises one
+  after a save and after a delete. It previously raised none, so a note written
+  in `/write` earned nothing until the page was reloaded: the ledger only
+  advances on a scan, and the only automatic scan was the one on mount. A user
+  watching the counter had every reason to read that as a broken feature.
+- `/write` also carries a **Rescan** control in the workspace status strip, for
+  a note written in another app (Obsidian, a sync client, a plain editor) while
+  the page is open. Activity is detected on read, not on write, and the control
+  makes that explicit instead of implying XP arrives live.
+
 - The activity log lists what each companion earned, from which repository or
   folder, and when. It is a read model over the ledger (no new storage), scoped
   per active companion. Rows a daily cap rejected are listed with zero XP and
