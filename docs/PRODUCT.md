@@ -490,13 +490,27 @@ outcomes, not raw volume.
 | Closed linked issue | 10 | Only when linked to the project or PR. |
 | Successful CI on merged PR | 10 | One qualifying success per merged PR. |
 
-**Every category is capped.** The activity categories are capped because a day
-is one day. The content categories are capped because a scan is repeatable: a
-file can be padded, rescanned, padded again, and each pass changes the content
-hash, so "net new words" alone is not a bound. Without content caps the note
-source paid without limit while the GitHub source was capped at 30 XP/day
-(10 active day + two 10 XP sessions), which made the two sources incomparable
-and made padding a file out-earn a month of real commits.
+**Every category is capped, and so is every day.** The activity categories are
+capped because a day is one day. The content categories are capped because a
+scan is repeatable: a file can be padded, rescanned, padded again, and each pass
+changes the content hash, so "net new words" alone is not a bound. Without
+content caps the note source paid without limit while the GitHub source was
+capped at 30 XP/day (10 active day + two 10 XP sessions), which made the two
+sources incomparable and made padding a file out-earn a month of real commits.
+
+**A global daily budget of 300 XP** applies across every source, per calendar
+day. This is the "cross-source diminishing returns or a global soft limit" the
+section below has always promised and nothing implemented until now. Per-source
+caps alone let each new source bring its own allowance, so six sources meant six
+allowances; the budget is what keeps the economy the same shape as sources are
+added. It does not bind on today's two sources: notes maxed reach 191, GitHub's
+activity ceiling is 30, and both together are 221. It binds the moment a third
+source joins, which is exactly the case it exists for. The figure is set to clear
+every honest single-source day measured, including a heavy GitHub day of eight
+merged pull requests and four green builds (270), because those categories carry
+no per-source cap of their own and the budget is the only limit on them. The
+budget is pacing, not security, and is not claimed as such: a guest owns their
+local state, and only the `verified` side is signed by the server.
 
 The caps are deliberately hardened against the inputs a user controls:
 

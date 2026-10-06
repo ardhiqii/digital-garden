@@ -69,8 +69,24 @@ describe('achievements', () => {
   })
 
   it('unlocks century_club at exactly 100 notes', () => {
+    // Spread across days, because a real source caps new notes per day (three,
+    // in `markdown-events.ts`). A hundred notes in one day is a ledger no source
+    // can produce, and the day's global budget would reject most of it. The
+    // achievement is about having written a hundred notes, not about a single
+    // impossible afternoon.
+    const days = 40
     const make = (n: number) =>
-      achievementContext(stateWithEvents(Array.from({ length: n }, (_, i) => event(`n${i}`))))
+      achievementContext(
+        stateWithEvents(
+          Array.from({ length: n }, (_, i) =>
+            event(`n${i}`, {
+              occurredAt: new Date(
+                Date.UTC(2026, 7, 1 + Math.floor(i / 3) % days, 10),
+              ).toISOString(),
+            }),
+          ),
+        ),
+      )
     const club = ACHIEVEMENTS.find((a) => a.id === 'century_club')!
     expect(club.unlocked(make(99))).toBe(false)
     expect(club.unlocked(make(100))).toBe(true)

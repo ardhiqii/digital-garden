@@ -20,6 +20,7 @@
 import {
   XP_BY_EVENT_CATEGORY,
   acceptedLedgerEvents,
+  explainLedgerAcceptance,
   type CompanionId,
   type EventCategory,
   type EventLedger,
@@ -62,8 +63,17 @@ export interface ActivityLogEntry {
 
 export interface ActivityLog {
   readonly entries: readonly ActivityLogEntry[]
-  /** Sum of the XP actually counted, for the filtered companion. */
+  /** Sum of the XP actually counted, for the filtered companion, all time. */
   readonly totalXp: number
+  /**
+   * XP accepted for the newest event's day, across every companion and source.
+   *
+   * This, not `totalXp`, is what the daily budget meter must show: the budget is
+   * one day wide and global, while `totalXp` is a lifetime for one companion.
+   */
+  readonly dayXp: number
+  /** The day `dayXp` belongs to, or null when there is nothing to show. */
+  readonly day: string | null
   /** How many entries were listed but earned nothing. */
   readonly skippedCount: number
 }
@@ -94,16 +104,21 @@ function sourceLabelFor(event: NormalizedEvent): string {
 }
 
 /**
- * Builds the log newest-first. Events that survived their cap earn their
- * category's XP; the rest are listed with 0 and a reason.
+ * Builds the log newest-first. Events that survived every cap earn their
+ * category's XP; the rest are listed with 0 and the reason they did not.
+ *
+ * The reason comes from the ledger itself rather than being assumed, because
+ * there are now two distinguishable ways an event earns nothing: it lost its
+ * own source's daily cap, or it was fine but the day's global budget was already
+ * spent. Telling a user "beyond the daily limit for this source" when the real
+ * cause was the budget would be a lie about how their own economy works.
  */
 export function resolveActivityLog(
   ledger: EventLedger,
   options: ActivityLogOptions = {},
 ): ActivityLog {
-  const acceptedIds = new Set(
-    acceptedLedgerEvents(ledger).map((event) => event.eventId),
-  )
+  const { accepted, rejected } = explainLedgerAcceptance(ledger)
+  const acceptedIds = new Set(accepted.map((event) => event.eventId))
 
   // Deduplicate the same way the ledger does, so a replayed delivery does not
   // appear twice in the log: first write wins.
@@ -120,6 +135,7 @@ export function resolveActivityLog(
 
     const counted = acceptedIds.has(event.eventId)
     const xp = counted ? XP_BY_EVENT_CATEGORY[event.category] : 0
+    const reason = rejected.get(event.eventId)
 
     entries.push({
       eventId: event.eventId,
@@ -132,7 +148,14 @@ export function resolveActivityLog(
       provenance: event.provenance,
       xp,
       counted,
-      ...(counted ? {} : { skipReason: 'Beyond the daily limit for this source' }),
+      ...(counted
+        ? {}
+        : {
+            skipReason:
+              reason === 'daily-budget'
+                ? "Beyond today's overall xp budget"
+                : 'Beyond the daily limit for this source',
+          }),
     })
   }
 
@@ -146,9 +169,24 @@ export function resolveActivityLog(
 
   const totalXp = entries.reduce((sum, entry) => sum + entry.xp, 0)
 
+  // What the DAY has spent, for the budget meter. Deliberately not `totalXp`:
+  // that is this companion's entire history, while the budget is one day across
+  // every companion. Rendering the lifetime total against a daily budget showed
+  // "1,800 / 250" for a busy companion and made the label a false statement.
+  // The day is the newest event's day, which is the day a live session is in.
+  const newestDay = entries.length > 0 ? entries[0].occurredAt.slice(0, 10) : null
+  const dayXp = newestDay === null
+    ? 0
+    : acceptedLedgerEvents(ledger).reduce((sum, event) => {
+        if (event.occurredAt.slice(0, 10) !== newestDay) return sum
+        return sum + (XP_BY_EVENT_CATEGORY[event.category] ?? 0)
+      }, 0)
+
   return {
     entries,
     totalXp,
+    dayXp,
+    day: newestDay,
     skippedCount: entries.filter((entry) => !entry.counted).length,
   }
 }
