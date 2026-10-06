@@ -27,6 +27,7 @@ import {
   type GuestProfile,
 } from '@/lib/game/guest-profile'
 import { normalizeMarkdownEvents, type MarkdownFileSnapshot } from '@/lib/game/markdown-events'
+import { MARKDOWN_SCAN_EVENT, type MarkdownScanDetail } from '@/lib/garden-fs/scan-dispatch'
 import { canonicalizeProductEvent } from '@/lib/sync/product-event-id'
 
 const LEDGER_KEY = 'terrarium:guest-event-ledger'
@@ -35,7 +36,6 @@ const REVEALED_DRAWS_KEY = 'terrarium:guest-revealed-draws'
 const LEGACY_LEDGER_KEY = 'digital-garden:guest-event-ledger'
 const LEGACY_ENCOUNTER_KEY = 'digital-garden:guest-encounters'
 const PROFILE_EVENT = 'terrarium:guest-profile-updated'
-const SCAN_EVENT = 'terrarium:markdown-scan'
 const LEGACY_PROFILE_EVENT = 'digital-garden:guest-profile-updated'
 const LEGACY_SCAN_EVENT = 'digital-garden:markdown-scan'
 
@@ -43,11 +43,6 @@ interface BrowserStorage {
   getItem(key: string): string | null
   setItem(key: string, value: string): void
   removeItem(key: string): void
-}
-
-interface MarkdownScanDetail {
-  sourceId: string
-  files: MarkdownFileSnapshot[]
 }
 
 function storage(): BrowserStorage {
@@ -201,6 +196,9 @@ export function GuestProductRuntime() {
         companionId: profile.activeCompanionId,
         previous,
         current: detail.files,
+        // The scan's own time, from the clock. Daily caps bucket by this, never
+        // by a file's mtime, which the user can set.
+        now: new Date().toISOString(),
       })
       previousScans.current.set(detail.sourceId, detail.files)
       if (normalized.length === 0) {
@@ -221,12 +219,12 @@ export function GuestProductRuntime() {
     }
 
     window.addEventListener(PROFILE_EVENT, onProfileUpdated)
-    window.addEventListener(SCAN_EVENT, onScan)
+    window.addEventListener(MARKDOWN_SCAN_EVENT, onScan)
     window.addEventListener(LEGACY_PROFILE_EVENT, onProfileUpdated)
     window.addEventListener(LEGACY_SCAN_EVENT, onScan)
     return () => {
       window.removeEventListener(PROFILE_EVENT, onProfileUpdated)
-      window.removeEventListener(SCAN_EVENT, onScan)
+      window.removeEventListener(MARKDOWN_SCAN_EVENT, onScan)
       window.removeEventListener(LEGACY_PROFILE_EVENT, onProfileUpdated)
       window.removeEventListener(LEGACY_SCAN_EVENT, onScan)
     }

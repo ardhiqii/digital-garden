@@ -8,6 +8,7 @@ import { Markdown } from 'tiptap-markdown'
 import type { GardenFile, GardenSource } from '@/lib/garden-fs/types'
 import { parseNote, serializeNote, titleToFileName, type NoteFrontMatter } from '@/lib/garden-fs/serialize'
 import { renameNoteEverywhere } from '@/lib/garden-fs/rewrite'
+import { dispatchMarkdownScanDetail } from '@/lib/garden-fs/scan-dispatch'
 import { extractWikilinks, slugify } from '@/lib/utils'
 import { computeGardenXp } from '@/lib/game/xp'
 import type { CreatureState, GardenStats, Maturity, XpEntry } from '@/lib/game/types'
@@ -252,15 +253,25 @@ export default function EditorPane({ source, creatureState }: EditorPaneProps) {
     []
   )
 
-  const refresh = useCallback(async () => {
+  /**
+   * Re-read the folder's file list.
+   *
+   * Returns the list it read so a caller that just wrote something can announce
+   * the change without paying for a second `list()`. Null means the read
+   * failed, in which case there is nothing to announce.
+   */
+  const refresh = useCallback(async (): Promise<GardenFile[] | null> => {
     try {
       const list = await source.list()
       setFiles(list)
       setError(null)
+      setLoading(false)
+      return list
     } catch {
       setError('Could not read the connected folder. Permission may have been revoked.')
+      setLoading(false)
+      return null
     }
-    setLoading(false)
   }, [source])
 
   useEffect(() => {
@@ -374,7 +385,11 @@ export default function EditorPane({ source, creatureState }: EditorPaneProps) {
           return
         }
         await source.write(fileName, serializeNote(frontMatter, draft.body))
-        await refresh()
+        const created = await refresh()
+        // Announce the write to the product runtime. Without this the ledger
+        // only advanced on the next page load, so a note saved here earned
+        // nothing visible until the user reloaded, which read as a bug.
+        if (created) dispatchMarkdownScanDetail(source.name, created)
         setSelectedFileName(fileName)
         setOriginalTitle(trimmedTitle)
         setOriginalFrontMatter(frontMatter)
@@ -407,7 +422,10 @@ export default function EditorPane({ source, creatureState }: EditorPaneProps) {
       }
 
       await source.write(finalFileName, serializeNote(frontMatter, draft.body))
-      await refresh()
+      const saved = await refresh()
+      // Same reason as the create path: the ledger advances on a scan, so a
+      // save has to raise one or the XP for this edit does not exist yet.
+      if (saved) dispatchMarkdownScanDetail(source.name, saved)
       setSelectedFileName(finalFileName)
       setOriginalTitle(trimmedTitle)
       setOriginalFrontMatter(frontMatter)
@@ -428,7 +446,10 @@ export default function EditorPane({ source, creatureState }: EditorPaneProps) {
     setError(null)
     try {
       await source.remove(selectedFileName)
-      await refresh()
+      const remaining = await refresh()
+      // A deletion can remove resolved wikilinks, so the runtime needs to see
+      // the folder as it is now rather than as it was at the last scan.
+      if (remaining) dispatchMarkdownScanDetail(source.name, remaining)
       setSelectedFileName(null)
       setMode('list')
       setDraft(EMPTY_DRAFT)

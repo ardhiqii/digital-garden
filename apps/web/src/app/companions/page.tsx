@@ -152,6 +152,14 @@ export default async function CompanionsPage() {
           >
             preview
           </Link>
+          . Your own rank and milestones live under{' '}
+          <Link
+            href="/progression"
+            className="underline decoration-dotted underline-offset-2 hover:opacity-70 transition-opacity"
+            style={{ color: 'var(--accent)' }}
+          >
+            progression
+          </Link>
           .
         </p>
       </div>

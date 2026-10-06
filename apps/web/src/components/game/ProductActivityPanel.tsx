@@ -2,7 +2,9 @@
 
 import { DEFAULT_ENCOUNTER_CONFIG } from '@/lib/game/encounters'
 import type { ProductState } from '@/lib/game/product-state'
+import { titleForState } from '@/lib/game/achievements'
 import { displayCompanionName } from './display-name'
+import { ActivityLogList } from './ActivityLogList'
 
 export interface ProductActivityPanelProps {
   state: ProductState
@@ -47,6 +49,7 @@ export function ProductActivityPanel({
     ? displayCompanionName(activeCompanion.companionId)
     : 'No active companion'
   const progressionName = progression?.step.name ?? 'Not started'
+  const title = titleForState(state)
 
   return (
     <section
@@ -76,6 +79,13 @@ export function ProductActivityPanel({
           Active companion
         </p>
       </div>
+
+      <p className="font-data mt-2 text-xs" style={{ color: 'var(--ink-muted)' }}>
+        <span style={{ color: 'var(--accent)' }}>{title.title.name}</span>
+        {title.nextTitle
+          ? ` · ${title.xpIntoTier.toLocaleString()} / ${title.xpForNextTier?.toLocaleString()} xp to ${title.nextTitle.name}`
+          : ' · highest rank reached'}
+      </p>
 
       <dl className="mt-6 grid gap-4 sm:grid-cols-3">
         <div>
@@ -152,6 +162,19 @@ export function ProductActivityPanel({
             style={{ width: `${encounterProgress}%`, background: 'var(--accent)' }}
           />
         </div>
+      </div>
+
+      <div className="mt-5 border-t pt-4" style={{ borderColor: 'var(--rule)' }}>
+        <h3
+          className="font-data mb-3 text-xs uppercase tracking-widest"
+          style={{ color: 'var(--ink-muted)', letterSpacing: '0.15em' }}
+        >
+          Activity log
+        </h3>
+        <ActivityLogList
+          ledger={state.ledger}
+          companionId={activeCompanion ? String(activeCompanion.companionId) : undefined}
+        />
       </div>
 
       <p className="font-prose mt-5 text-xs leading-relaxed" style={{ color: 'var(--ink-muted)' }}>

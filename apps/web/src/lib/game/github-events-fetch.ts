@@ -352,7 +352,8 @@ async function fetchMergedPullRequests(
       const mergeCommitSha = optionalString(stringField(item, 'merge_commit_sha'))
       out.push({
         id,
-        repositoryId: repositoryId(repo),
+repositoryId: repositoryId(repo),
+        repositoryName: repo.fullName,
         ...(number === undefined ? {} : { number }),
         mergedAt,
         ...(headSha ? { headSha } : {}),
@@ -387,7 +388,8 @@ async function fetchReleases(
     const tagName = optionalString(stringField(item, 'tag_name'))
     out.push({
       id: stringField(item, 'node_id') ?? String(numberField(item, 'id') ?? 0),
-      repositoryId: repositoryId(repo),
+repositoryId: repositoryId(repo),
+      repositoryName: repo.fullName,
       ...(tagName ? { tagName } : {}),
       publishedAt,
       draft: false,
@@ -419,7 +421,8 @@ async function fetchClosedIssues(
       const issueNumber = optionalNumber(numberField(item, 'number'))
       out.push({
         id: stringField(item, 'node_id') ?? String(numberField(item, 'id') ?? 0),
-        repositoryId: repositoryId(repo),
+repositoryId: repositoryId(repo),
+        repositoryName: repo.fullName,
         ...(issueNumber === undefined ? {} : { number: issueNumber }),
         closedAt,
       })
@@ -469,7 +472,8 @@ async function fetchCheckRuns(
         if (!completedAt) continue
         checks.push({
           id: stringField(check, 'node_id') ?? String(numberField(check, 'id') ?? 0),
-          repositoryId: repositoryId(repo),
+repositoryId: repositoryId(repo),
+          repositoryName: repo.fullName,
           completedAt,
           conclusion,
           status,
@@ -612,7 +616,8 @@ async function fetchUserCommits(
         changedFiles === 0 && additions === 0 && deletions === 0
       out.push({
         id: sha,
-        repositoryId: repositoryId(repo),
+repositoryId: repositoryId(repo),
+        repositoryName: repo.fullName,
         occurredAt,
         ...(additions === null ? {} : { additions }),
         ...(deletions === null ? {} : { deletions }),

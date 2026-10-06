@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeMarkdownEvents } from './markdown-events'
+import { CONTENT_DAILY_LIMITS, normalizeMarkdownEvents } from './markdown-events'
 
 const companionId = 'pikachu-default'
+/** Scan time: the trusted clock the daily caps bucket by. */
+const now = '2026-08-28T12:00:00.000Z'
 
 describe('normalizeMarkdownEvents', () => {
   it('emits derived events for a new note without including note content', () => {
@@ -21,6 +23,7 @@ describe('normalizeMarkdownEvents', () => {
           modifiedAt: '2026-08-28T09:00:00.000Z',
         },
       ],
+      now,
     })
 
     const categories = events.map((event) => event.category)
@@ -32,10 +35,54 @@ describe('normalizeMarkdownEvents', () => {
     expect(events.every((event) => event.provenance === 'local')).toBe(true)
     expect(events.every((event) => !JSON.stringify(event).includes('word word'))).toBe(true)
     expect(events.filter((event) => event.category === 'new-words')).toHaveLength(2)
+    // The day comes from the scan clock, not from any file's mtime, and the key
+    // carries no sourceId: every mounted folder shares one daily budget.
     expect(events.find((event) => event.category === 'qualifying-active-day')?.cap).toEqual({
-      key: 'mounted-markdown:vault:main:2026-08-28:qualifying-active-day',
+      key: 'mounted-markdown:2026-08-28:qualifying-active-day',
       limit: 1,
     })
+  })
+
+  it('caps content events so a scan cannot pay without bound', () => {
+    const events = normalizeMarkdownEvents({
+      sourceId: 'vault:main',
+      companionId,
+      previous: [],
+      current: [
+        {
+          path: 'big.md',
+          content: 'word '.repeat(5000),
+          modifiedAt: '2026-08-28T09:00:00.000Z',
+        },
+      ],
+      now,
+    })
+
+    const words = events.find((event) => event.category === 'new-words')
+    expect(words?.cap).toEqual({
+      key: 'mounted-markdown:2026-08-28:new-words',
+      limit: CONTENT_DAILY_LIMITS['new-words'],
+    })
+  })
+
+  it('charges a scan to the clock day even when every file is backdated', () => {
+    const events = normalizeMarkdownEvents({
+      sourceId: 'vault:main',
+      companionId,
+      previous: [],
+      current: [
+        {
+          path: 'old.md',
+          content: '# Old',
+          modifiedAt: '2019-01-01T00:00:00.000Z',
+        },
+      ],
+      now: '2026-08-28T12:00:00.000Z',
+    })
+
+    expect(events.find((event) => event.category === 'new-note')?.cap?.key).toBe(
+      'mounted-markdown:2026-08-28:new-note',
+    )
   })
 
   it('is quiet for an unchanged scan and only counts net new words on edits', () => {
@@ -53,6 +100,7 @@ describe('normalizeMarkdownEvents', () => {
         companionId,
         previous,
         current: previous,
+        now,
       }),
     ).toEqual([])
 
@@ -67,6 +115,7 @@ describe('normalizeMarkdownEvents', () => {
           modifiedAt: '2026-08-28T11:00:00.000Z',
         },
       ],
+      now,
     })
 
     expect(edited.filter((event) => event.category === 'new-words')).toHaveLength(0)
@@ -80,7 +129,20 @@ describe('normalizeMarkdownEvents', () => {
         companionId,
         previous: [],
         current: [{ path: '../secret.md', content: 'x', modifiedAt: '2026-08-28T09:00:00.000Z' }],
+        now,
       }),
     ).toThrow('Invalid Markdown path')
+  })
+
+  it('rejects a malformed scan time rather than silently bucketing it', () => {
+    expect(() =>
+      normalizeMarkdownEvents({
+        sourceId: 'vault:main',
+        companionId,
+        previous: [],
+        current: [{ path: 'a.md', content: 'x', modifiedAt: '2026-08-28T09:00:00.000Z' }],
+        now: 'not-a-date',
+      }),
+    ).toThrow('Invalid Markdown timestamp')
   })
 })

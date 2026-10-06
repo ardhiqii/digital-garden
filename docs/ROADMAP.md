@@ -50,6 +50,24 @@ weighted by transparent work signals. Duplicates become family-specific Essence.
 
 ### New product loop shipped
 
+- The mounted-folder source raises its scan in one shared place
+  (`lib/garden-fs/scan-dispatch.ts`), and the built-in editor now raises one
+  after a save and after a delete. It previously raised none, so a note written
+  in `/write` earned nothing until the page was reloaded: the ledger only
+  advances on a scan, and the only automatic scan was the one on mount. A user
+  watching the counter had every reason to read that as a broken feature.
+- `/write` also carries a **Rescan** control in the workspace status strip, for
+  a note written in another app (Obsidian, a sync client, a plain editor) while
+  the page is open. Activity is detected on read, not on write, and the control
+  makes that explicit instead of implying XP arrives live.
+
+- The activity log lists what each companion earned, from which repository or
+  folder, and when. It is a read model over the ledger (no new storage), scoped
+  per active companion. Rows a daily cap rejected are listed with zero XP and
+  the reason, because a log that hides its own exclusions makes a capped day
+  look like a broken feature. Repository names are recorded as identifiers on
+  GitHub event metadata; note text, titles, and paths remain unrecorded.
+
 - Guest onboarding creates an immediate local starter without authentication.
 - The `/write` route now exposes starter selection, recoverability warning, and
   a local activity panel.
@@ -203,8 +221,16 @@ real Vercel plus Supabase deployment verification, remain open.
 ### 3. Complete public profile privacy and account lifecycle
 
 Gate `/u/[handle]`, leaderboard rows, and extension payloads behind the existing
-opt-in visibility policy. Add explicit disconnect, cloud-delete, guest export,
-and account-switch flows before exposing public companion state widely.
+opt-in visibility policy.
+
+**Partially shipped:** `/u/[handle]` and the leaderboard rows are now gated by a
+persisted per-account visibility choice (`profile-visibility-store.ts`, keyed by
+immutable GitHub id, default PRIVATE). The owner can toggle it via
+`GET`/`PUT /api/profile/visibility`, and a hidden profile reveals nothing — not
+the creature, not the counts. Still to do: gate the extension payload, add a
+visibility control to the account surface, and add explicit disconnect,
+cloud-delete, guest export, and account-switch flows before exposing public
+companion state widely.
 
 ### 4. Replace legacy collection surfaces
 
