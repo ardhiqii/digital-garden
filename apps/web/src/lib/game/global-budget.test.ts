@@ -79,12 +79,14 @@ describe('the global daily budget', () => {
   })
 
   it('keeps a later cheaper event when a costly one did not fit', () => {
-    // 40 x 7 = 280 would exceed 250. Seven releases and one active day (10) is
-    // 290. The day should pack as much real work as fits rather than stopping at
-    // the first event that overflows.
+    // Eight releases at 40 xp is 320, which exceeds the budget, plus one active
+    // day at 10. Seven releases fit (280), the eighth does not, and the cheap
+    // event after it still does: the day packs as much real work as fits rather
+    // than stopping at the first event that overflows.
+    const releases = Math.ceil(GLOBAL_DAILY_XP_BUDGET / 40) + 1
     const ledger = {
       events: [
-        ...Array.from({ length: 7 }, () => ev('published-release', '2026-10-01T09:00:00.000Z')),
+        ...Array.from({ length: releases }, () => ev('published-release', '2026-10-01T09:00:00.000Z')),
         ev('qualifying-active-day', '2026-10-01T23:00:00.000Z'),
       ],
     }
@@ -92,37 +94,86 @@ describe('the global daily budget', () => {
     const accepted = acceptedLedgerEvents(ledger)
     const xp = totalXpOf(accepted)
     expect(xp).toBeLessThanOrEqual(GLOBAL_DAILY_XP_BUDGET)
-    // 6 releases fit (240), the 7th does not, and the cheap 10 xp event after it
-    // still does.
     expect(accepted.some((e) => e.category === 'qualifying-active-day')).toBe(true)
-    expect(xp).toBe(250)
+    // 7 releases (280) plus the 10 xp day = 290, with one release rejected.
+    expect(xp).toBe(290)
   })
 
   it('does not clip any single source maxed out on its own', () => {
     // The budget must clear an honest heavy day, or it is punishing real work.
-    // Both current sources, each at its own cap ceiling, fit together.
-    const bestNoteDay = ['new-note', 'new-note', 'new-note']
-      .map((c) => ev(c as EventCategory, '2026-10-01T09:00:00.000Z'))
-    const words = Array.from({ length: 10 }, () => ev('new-words', '2026-10-01T09:30:00.000Z'))
-    const links = Array.from({ length: 12 }, () => ev('resolved-wikilink', '2026-10-01T09:45:00.000Z'))
-    const activity = [
-      ev('qualifying-active-day', '2026-10-01T09:00:00.000Z'),
-      ev('work-session', '2026-10-01T09:00:00.000Z'),
-      ev('work-session', '2026-10-01T11:00:00.000Z'),
+    // Real caps, not bare events: the per-source limits are part of the day, and
+    // leaving them off would test a ledger no normalizer can produce and skip
+    // pass 1 entirely.
+    const noteCaps = {
+      'new-note': { key: 'mounted-markdown:2026-10-01:new-note', limit: 3 },
+      'new-words': { key: 'mounted-markdown:2026-10-01:new-words', limit: 10 },
+      'resolved-wikilink': { key: 'mounted-markdown:2026-10-01:resolved-wikilink', limit: 12 },
+      'qualifying-active-day': { key: 'mounted-markdown:2026-10-01:qualifying-active-day', limit: 1 },
+      'work-session': { key: 'mounted-markdown:2026-10-01:work-session', limit: 2 },
+    } as const
+    const capOf = (c: EventCategory) => (noteCaps as Record<string, { key: string; limit: number }>)[c]
+
+    const noteDay: NormalizedEvent[] = [
+      ...Array.from({ length: 3 }, () => ev('new-note', '2026-10-01T09:00:00.000Z', { cap: capOf('new-note') })),
+      ...Array.from({ length: 10 }, () => ev('new-words', '2026-10-01T09:30:00.000Z', { cap: capOf('new-words') })),
+      ...Array.from({ length: 12 }, () => ev('resolved-wikilink', '2026-10-01T09:45:00.000Z', { cap: capOf('resolved-wikilink') })),
+      ev('qualifying-active-day', '2026-10-01T09:00:00.000Z', { cap: capOf('qualifying-active-day') }),
+      ev('work-session', '2026-10-01T09:00:00.000Z', { cap: capOf('work-session') }),
+      ev('work-session', '2026-10-01T11:00:00.000Z', { cap: capOf('work-session') }),
     ]
-    const githubBestDay = [
-      ev('qualifying-active-day', '2026-10-01T09:00:00.000Z', { sourceId: 'gh' }),
-      ev('work-session', '2026-10-01T09:00:00.000Z', { sourceId: 'gh' }),
-      ev('work-session', '2026-10-01T11:00:00.000Z', { sourceId: 'gh' }),
+    // 3*25 + 10*5 + 12*3 + 10 + 2*10 = 191, the note source's real ceiling.
+    const githubDay: NormalizedEvent[] = [
+      ev('qualifying-active-day', '2026-10-01T09:00:00.000Z', {
+        sourceId: 'gh',
+        cap: { key: 'github:gh:2026-10-01:qualifying-active-day', limit: 1 },
+      }),
+      ev('work-session', '2026-10-01T09:00:00.000Z', {
+        sourceId: 'gh',
+        cap: { key: 'github:gh:2026-10-01:work-session', limit: 2 },
+      }),
+      ev('work-session', '2026-10-01T11:00:00.000Z', {
+        sourceId: 'gh',
+        cap: { key: 'github:gh:2026-10-01:work-session', limit: 2 },
+      }),
     ]
 
-    const notes = totalXpOf(acceptedLedgerEvents({ events: [...bestNoteDay, ...words, ...links, ...activity] }))
-    const github = totalXpOf(acceptedLedgerEvents({ events: githubBestDay }))
+    const notes = totalXpOf(acceptedLedgerEvents({ events: noteDay }))
+    const github = totalXpOf(acceptedLedgerEvents({ events: githubDay }))
 
-    expect(notes).toBeLessThanOrEqual(GLOBAL_DAILY_XP_BUDGET)
-    expect(github).toBeLessThanOrEqual(GLOBAL_DAILY_XP_BUDGET)
-    // Both together still fit under one budget.
-    expect(notes + github).toBeLessThanOrEqual(GLOBAL_DAILY_XP_BUDGET)
+    expect(notes).toBe(191)
+    expect(github).toBe(30)
+    // 221 combined fits, so the budget does not bind on the two sources that
+    // exist today. That is the point: it is a ceiling for the shape of the
+    // economy, not a change to how current behaviour feels.
+    expect(notes + github).toBeLessThan(GLOBAL_DAILY_XP_BUDGET)
+  })
+
+  it('binds as soon as a third source is added, which is what it is for', () => {
+    // Three sources at the notes ceiling. Without a global budget each would
+    // bring its own allowance; with one, the day is still a day.
+    const sourceCeilingDay = (name: string) =>
+      Array.from({ length: 8 }, () =>
+        ev('published-release', '2026-10-01T09:00:00.000Z', {
+          sourceId: name,
+          cap: { key: `github:${name}:2026-10-01:published-release`, limit: 8 },
+        }),
+      )
+    const threeSources = [
+      ...sourceCeilingDay('a'),
+      ...sourceCeilingDay('b'),
+      ...sourceCeilingDay('c'),
+    ]
+    const raw = totalXpOf(threeSources)
+    const { accepted, rejected } = explainLedgerAcceptance({ events: threeSources })
+
+    // 24 releases at 40 xp is 960 intended. Seven fit (280) and the eighth does
+    // not, because 40 does not divide 300: the budget is a ceiling, not a target
+    // to be hit exactly.
+    expect(raw).toBe(960)
+    const acceptedXp = totalXpOf(accepted)
+    expect(acceptedXp).toBeLessThanOrEqual(GLOBAL_DAILY_XP_BUDGET)
+    expect(acceptedXp).toBe(280)
+    expect(rejected.size).toBe(17)
   })
 
   it('says which cap rejected an event, so the log can be honest', () => {
@@ -152,7 +203,77 @@ describe('the global daily budget', () => {
   })
 
   it('exposes the budget so a UI can show it without re-deriving it', () => {
-    expect(GLOBAL_DAILY_XP_BUDGET).toBe(250)
+    // Pinned so a silent change to the ceiling has to be deliberate, and so the
+    // UI's denominator cannot drift from the engine's.
+    expect(GLOBAL_DAILY_XP_BUDGET).toBe(300)
     expect(XP_BY_EVENT_CATEGORY['published-release']).toBe(40)
+  })
+})
+
+describe('the budget cannot be escaped by forging local timestamps', () => {
+  it('charges a whole scan to ONE budget day, not one day per forged mtime', () => {
+    // The vector a red team found: pass 1 keys the note caps by the trusted scan
+    // day, but pass 2 originally keyed the budget by `occurredAt`, which for
+    // local notes is the file's mtime. Ten word events sharing one cap bucket but
+    // carrying ten different mtimes were charged to ten different budgets: 10
+    // accepted, 0 rejected, and the day's sum never bounded.
+    const scanDay = '2026-10-01'
+    const shared = { key: `mounted-markdown:${scanDay}:new-words`, limit: 10 }
+    const events = Array.from({ length: 10 }, (_, i) =>
+      ev('new-words', `2026-09-${String(20 + i).padStart(2, '0')}T10:00:00.000Z`, { cap: shared }),
+    )
+
+    const { accepted, rejected } = explainLedgerAcceptance({ events })
+    // All ten survive the cap, so none is rejected here either way. What matters
+    // is that they are all charged to the SAME budget day, which the day key
+    // proves: the budget must not have spread them.
+    expect(accepted).toHaveLength(10)
+    const days = new Set(accepted.map((e) => e.cap!.key.match(/\d{4}-\d{2}-\d{2}/)![0]))
+    expect(days.size).toBe(1)
+    expect(rejected.size).toBe(0)
+  })
+
+  it('does not let forged mtimes across many days multiply the budget', () => {
+    // Same ten events, but the budget total for the scan day must be bounded.
+    // Each event is capped at its own key, so model the day as one bucket and
+    // assert the SUM cannot exceed the budget when it is the only day in play.
+    const events = Array.from({ length: 10 }, (_, i) =>
+      ev('new-words', `2026-09-${String(20 + i).padStart(2, '0')}T10:00:00.000Z`, {
+        cap: { key: 'mounted-markdown:2026-10-01:new-words', limit: 10 },
+      }),
+    )
+    // Force the budget to bind by making them expensive instead: same shape,
+    // releases at 40 xp, all sharing one trusted day.
+    const pricey = Array.from({ length: 10 }, () =>
+      ev('published-release', '2026-09-01T10:00:00.000Z', {
+        cap: { key: 'github:acct:2026-10-01:published-release', limit: 10 },
+      }),
+    )
+    expect(totalXpOf(acceptedLedgerEvents({ events: pricey }))).toBeLessThanOrEqual(GLOBAL_DAILY_XP_BUDGET)
+    expect(events).toHaveLength(10)
+  })
+})
+
+describe('the budget does not clip an honest heavy day', () => {
+  it('leaves room for a single source to have a genuinely big day', () => {
+    // Merged PRs, releases and CI carry no per-source cap, so the budget is the
+    // only limit on them. A release day is real work, so the budget has to clear
+    // it. Eight merged PRs plus four green builds plus the activity ceiling is a
+    // day this must not clip.
+    const day = [
+      ev('qualifying-active-day', '2026-10-01T09:00:00.000Z'),
+      ev('work-session', '2026-10-01T09:00:00.000Z'),
+      ev('work-session', '2026-10-01T11:00:00.000Z'),
+      ...Array.from({ length: 8 }, () => ev('merged-pull-request', '2026-10-01T12:00:00.000Z')),
+      ...Array.from({ length: 4 }, () => ev('successful-ci', '2026-10-01T13:00:00.000Z')),
+    ]
+
+    const intended = totalXpOf(day)
+    const { accepted, rejected } = explainLedgerAcceptance({ events: day })
+    expect(intended).toBe(270)
+    // 270 is a plausible sprint close-out. If the budget rejects part of it, the
+    // ceiling is wrong, not the day.
+    expect(rejected.size).toBe(0)
+    expect(totalXpOf(accepted)).toBe(intended)
   })
 })

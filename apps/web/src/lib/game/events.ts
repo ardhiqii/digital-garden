@@ -156,18 +156,21 @@ function orderedForCap(events: readonly NormalizedEvent[]): NormalizedEvent[] {
  * "cross-source diminishing returns or a global soft limit [that] prevents
  * additional mounted sources from multiplying XP without bound", and until now
  * nothing implemented it. Only the per-source caps existed, so each new source
- * added its own daily allowance and four sources meant four allowances. That is
- * survivable at two sources (notes 191 + GitHub 30 = 221) and is not at six.
+ * added its own daily allowance and four sources meant four allowances.
  *
- * WHY 250: it has to clear an honest heavy day and still bind. A typical day (a
- * note plus a merged pull request) earns about 119, so this is not a limit
- * anybody reasonable meets. The theoretical ceiling with both current sources
- * maxed is 221, so today this changes almost nothing; it is a ceiling that
- * holds the shape of the economy as sources are added.
+ * WHY 300, NOT 250: the note categories are capped, but `merged-pull-request`,
+ * `published-release`, `closed-linked-issue` and `successful-ci` carry no cap of
+ * their own, so the budget is the ONLY limit on a heavy GitHub day. At 250 a
+ * plausible sprint close-out (eight merged pull requests, four green builds, plus
+ * the activity ceiling) totals 270 and was clipped by 20: the ceiling punished
+ * real work, the one thing it must never do. 300 clears every honest
+ * single-source day measured: notes maxed 191, a heavy GitHub day 270, a typical
+ * mixed day 119. It still binds where it matters, because both sources maxed
+ * together reach 461 and are held to 300.
  *
  * Values are playtest values, same caveat as the XP rates above.
  */
-export const GLOBAL_DAILY_XP_BUDGET = 250
+export const GLOBAL_DAILY_XP_BUDGET = 300
 
 /** Why an event earned nothing. */
 export type LedgerRejectionReason = 'source-cap' | 'daily-budget'
@@ -182,6 +185,35 @@ export interface LedgerAcceptance {
 /** The calendar day an event is charged to, in UTC. */
 function dayOf(timestamp: string): string {
   return timestamp.slice(0, 10)
+}
+
+/**
+ * The day an event's budget is charged to.
+ *
+ * WHY THIS IS NOT JUST `occurredAt.slice(0,10)`: pass 1 keys the per-source caps
+ * by the trusted scan day, but for local notes `occurredAt` is the file's
+ * modification time, which the caps deliberately stopped trusting because it is
+ * user-settable. Bucketing the budget by `occurredAt` therefore reopened the
+ * exact hole the content caps closed: one scan's events all survive a single cap
+ * bucket, then scatter across as many budget days as the user forged mtimes for,
+ * so the day's sum is never bounded.
+ *
+ * The trusted day is already in the cap key (`...:<YYYY-MM-DD>:<category>`, for
+ * both the note and GitHub producers), so it is read from there when a cap
+ * exists. GitHub events without a cap carry a server-supplied `occurredAt`,
+ * which is trustworthy, so they fall back to it.
+ *
+ * The day is the LAST date-shaped segment: the category names contain no date,
+ * while a source id in the middle of a GitHub key theoretically could.
+ */
+const ISO_DAY = /\d{4}-\d{2}-\d{2}/g
+
+function budgetDayOf(event: NormalizedEvent): string {
+  if (event.cap) {
+    const matches = event.cap.key.match(ISO_DAY)
+    if (matches && matches.length > 0) return matches[matches.length - 1]
+  }
+  return dayOf(event.occurredAt)
 }
 
 /**
@@ -229,7 +261,7 @@ export function explainLedgerAcceptance(ledger: EventLedger): LedgerAcceptance {
   // Pass 2: one budget per day, across every source.
   const byDay = new Map<string, NormalizedEvent[]>()
   for (const event of candidates) {
-    const day = dayOf(event.occurredAt)
+    const day = budgetDayOf(event)
     const group = byDay.get(day) ?? []
     group.push(event)
     byDay.set(day, group)
