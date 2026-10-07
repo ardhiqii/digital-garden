@@ -21,6 +21,7 @@ import {
 } from './encounters'
 import { resolveCompanionProgression, type CompanionCatalog } from './companion-catalog'
 import type { GuestCollectionReference, GuestProfile } from './guest-profile'
+import { layEggs } from './companion-eggs'
 import { canonicalizeProductEvent } from '../sync/product-event-id'
 
 export interface ProductCompanionState {
@@ -169,36 +170,24 @@ export function createProductState(
  * both idempotent.
  */
 /**
- * Fold freshly drawn companions into the profile's collection.
+ * Fold freshly drawn companions into the profile as eggs.
  *
- * WHY THIS IS EXPORTED RATHER THAN INLINED: there are two paths that produce
- * draws, the activity meter (`applyProductEvents`) and the daily claim
- * (`claimDailyDraw`). The daily path originally wrote only the encounter state
- * and left the collection untouched, so the draw appeared in `encounters.draws`
- * while the collection stayed at one companion. Both paths now share this, so a
- * draw cannot land in one place and not the other.
+ * WHY THIS REPLACED A DIRECT WRITE TO THE COLLECTION: both draw paths (the
+ * activity meter and the daily claim) now hand the user an egg to open rather
+ * than an entry that appeared by itself. If one path laid eggs and the other
+ * wrote to the collection, a companion's arrival would behave differently
+ * depending on which counter happened to trigger it, and the collection would
+ * silently contain companions nobody ever met.
  *
- * Duplicates are appended, not filtered: PRODUCT.md states the collection is
- * "every companion the user has encountered, including duplicates", and each
- * duplicate is what converted to Essence in the first place.
+ * Duplicates are dropped: `advanceEncounter` already banked them as Essence, so
+ * an egg for one would open onto nothing.
  */
 export function applyEncounterDraws(
   profile: GuestProfile,
   newDraws: readonly PersistedEncounterDraw[],
   now: string,
 ): GuestProfile {
-  if (newDraws.length === 0) return profile
-  const newReferences: GuestCollectionReference[] = newDraws.map((draw) => ({
-    referenceId: draw.id,
-    companionId: draw.selectedCompanionId,
-    acquiredAt: now,
-    acquisition: 'encounter',
-  }))
-  return {
-    ...profile,
-    updatedAt: now,
-    collection: [...profile.collection, ...newReferences],
-  }
+  return layEggs(profile, newDraws, now)
 }
 
 export function applyProductEvents(

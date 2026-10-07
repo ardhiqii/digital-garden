@@ -182,7 +182,15 @@ function unownedCompanionIds(snapshot: ProductSnapshot): string[] {
     snapshot.activeCompanionId,
     ...snapshot.companions.map((companion) => companion.companionId),
     ...snapshot.events.map((event) => event.companionId),
-    ...snapshot.encounters.draws.map((draw) => draw.selectedCompanionId),
+    // Draws are deliberately NOT included. A draw produces an egg, and an egg is a
+    // companion the user has not met yet: it is not in the collection by design,
+    // and it joins only when the user opens it. Requiring a draw's companion to be
+    // owned would make every unopened egg fail the sync with
+    // "references a companion outside its collection".
+    //
+    // The invariant this keeps is the one that matters: the ACTIVE companion, the
+    // per-companion state, and every recorded event must refer to something the
+    // user actually owns. Those are what progression is computed from.
   ])
   return [...referenced].filter((id) => !owned.has(id)).sort()
 }

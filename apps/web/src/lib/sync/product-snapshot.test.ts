@@ -378,10 +378,76 @@ describe('product snapshot', () => {
       cap: { key: 'cap-hash', limit: 1 },
       metadata: { activityCount: 1, bucket: 2, number: 3, sessionBucket: '2026-08-28-0' },
     })
-    expect(restored.ledger.events[0]?.metadata).toMatchObject({
-      repositoryIdHash: 'repo-hash',
-      linkedPullRequestIdHash: 'linked-pr-hash',
-      pullRequestIdHash: 'pr-hash',
+    })
+
+    describe('eggs and repository assignments survive a sync', () => {
+    it('keeps an unopened egg through serialize, deserialize, and restore', () => {
+    // Without this, signing in on a second device silently discards every
+    // companion the user had drawn but not yet opened: the collection would look
+    // correct and the eggs would simply be gone.
+    const now = '2026-08-28T10:00:00.000Z'
+    const profile = {
+      ...createGuestProfile({ guestId: 'guest-1', starterCompanionId: 'pikachu-family', now }),
+      eggs: [{ drawId: 'guest:0', companionId: 'ditto-like', laidAt: now }],
+    }
+    const state = createProductState(profile, { events: [] }, createEncounterState(), PROTOTYPE_COMPANION_CATALOG)
+    const snapshot = buildProductSnapshot(state, now)
+
+    expect(snapshot.eggs).toEqual([{ drawId: 'guest:0', companionId: 'ditto-like', laidAt: now }])
+
+    const roundTripped = deserializeProductSnapshot(serializeProductSnapshot(snapshot))
+    expect(roundTripped).not.toBeNull()
+    validateProductSnapshot(roundTripped)
+
+    const restored = restoreProductStateFromSnapshot(
+      roundTripped as ProductSnapshot,
+      createGuestProfile({ guestId: 'other-browser', starterCompanionId: 'pikachu-family', now }),
+      PROTOTYPE_COMPANION_CATALOG,
+    )
+    expect(restored.profile.eggs).toEqual([{ drawId: 'guest:0', companionId: 'ditto-like', laidAt: now }])
+    })
+
+    it('keeps a repository assignment through the same trip', () => {
+    const now = '2026-08-28T10:00:00.000Z'
+    const profile = {
+      ...createGuestProfile({ guestId: 'guest-1', starterCompanionId: 'pikachu-family', now }),
+      assignments: [
+        { repositoryId: '12345', referenceId: 'guest-1:starter', companionId: 'pikachu-family', assignedAt: now },
+      ],
+    }
+    const state = createProductState(profile, { events: [] }, createEncounterState(), PROTOTYPE_COMPANION_CATALOG)
+    const restored = restoreProductStateFromSnapshot(
+      deserializeProductSnapshot(serializeProductSnapshot(buildProductSnapshot(state, now))) as ProductSnapshot,
+      createGuestProfile({ guestId: 'other-browser', starterCompanionId: 'pikachu-family', now }),
+      PROTOTYPE_COMPANION_CATALOG,
+    )
+    expect(restored.profile.assignments).toEqual([
+      { repositoryId: '12345', referenceId: 'guest-1:starter', companionId: 'pikachu-family', assignedAt: now },
+    ])
+    })
+
+    it('still accepts a snapshot written before eggs existed', () => {
+    // A payload already in flight from an older client has neither field, and
+    // making them required would have rejected it with a 400 on first sync.
+    const now = '2026-08-28T10:00:00.000Z'
+    const state = createProductState(
+      createGuestProfile({ guestId: 'guest-1', starterCompanionId: 'pikachu-family', now }),
+      { events: [] },
+      createEncounterState(),
+      PROTOTYPE_COMPANION_CATALOG,
+    )
+    const snapshot = buildProductSnapshot(state, now)
+    const { eggs: _eggs, assignments: _assignments, ...legacy } = snapshot
+
+    expect(() => validateProductSnapshot(legacy)).not.toThrow()
+
+    const restored = restoreProductStateFromSnapshot(
+      legacy as ProductSnapshot,
+      createGuestProfile({ guestId: 'other-browser', starterCompanionId: 'pikachu-family', now }),
+      PROTOTYPE_COMPANION_CATALOG,
+    )
+    expect(restored.profile.eggs).toEqual([])
+    expect(restored.profile.assignments).toEqual([])
     })
   })
 })

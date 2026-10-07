@@ -14,6 +14,7 @@ import { CreatureSprite } from '@/components/game/CreatureSprite'
 import { StageLine } from '@/components/game/StageLine'
 import { ItemDrawer } from '@/components/game/ItemDrawer'
 import { OwnedCompanionGrid } from '@/components/game/OwnedCompanionGrid'
+import { EggShell } from '@/components/game/EggShell'
 import { ProductActivityPanel } from '@/components/game/ProductActivityPanel'
 
 export const metadata: Metadata = {
@@ -258,6 +259,7 @@ export default async function CompanionsPage() {
         </p>
         <OwnedCompanionGrid
           sprite={await CreatureSprite({ stage: 'sporeling', scale: 2 })}
+          eggSprite={<EggShell shell="var(--accent)" size={96} />}
         />
       </section>
     </div>

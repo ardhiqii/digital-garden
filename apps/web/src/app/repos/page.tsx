@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getOwnerCollection, getClusterCollection } from '@/lib/game/collection'
 import { CollectionGrid } from '@/components/game/CollectionGrid'
+import { CompanionPicker } from '@/components/game/CompanionPicker'
 
 const OWNER_LOGIN = process.env.GITHUB_LOGIN
 
@@ -62,6 +63,21 @@ export default async function ReposPage() {
           .
         </p>
       </div>
+
+      <section className="mb-16">
+        <h2 className="font-ui text-xl font-semibold tracking-tighter mb-2">
+          Dress a repository
+        </h2>
+        <p
+          className="font-prose text-sm leading-relaxed mb-5 max-w-2xl"
+          style={{ color: 'var(--ink-muted)' }}
+        >
+          Pick which of your companions appears on which repository. Each companion
+          is spent on exactly one, so you can dress as many repositories as you own
+          companions.
+        </p>
+        <CompanionPicker />
+      </section>
 
       <CollectionGrid entries={entries} />
     </div>

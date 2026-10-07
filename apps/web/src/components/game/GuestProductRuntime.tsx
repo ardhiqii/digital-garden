@@ -16,6 +16,7 @@ import {
 } from '@/lib/game/encounters'
 import { PROTOTYPE_COMPANION_CATALOG } from '@/lib/game/companion-catalog'
 import { claimDailyDraw, isDailyDrawDue } from '@/lib/game/daily-draw'
+import { layEggs } from '@/lib/game/companion-eggs'
 import {
     createProductState,
     applyProductEvents,
@@ -183,18 +184,15 @@ export function GuestProductRuntime() {
           )
           if (claimed.claimed) {
             saveEncounters(claimed.state)
-            // The collection has to be written too. Persisting only the encounter
-            // state left the draw sitting in `encounters.draws` while the
-            // collection stayed at one companion: the draw had happened and
-            // nothing said so.
-            const grown = applyEncounterDraws(
-              profile,
-              claimed.newDraws,
-              new Date().toISOString(),
-            )
-            saveGuestProfile(storage(), grown)
+            // The draw becomes an EGG, not a collection entry. A draw used to land
+            // straight in the collection and announce itself in a panel the user
+            // read; an egg is the same event with the user present for it. The
+            // companion joins the collection when the egg is opened, so an
+            // unhatched companion does not count toward the assignment bound.
+            const withEggs = layEggs(profile, claimed.newDraws, new Date().toISOString())
+            saveGuestProfile(storage(), withEggs)
             window.dispatchEvent(new Event(PROFILE_EVENT))
-            setState(createProductState(grown, loadLedger(), claimed.state, PROTOTYPE_COMPANION_CATALOG))
+            setState(createProductState(withEggs, loadLedger(), claimed.state, PROTOTYPE_COMPANION_CATALOG))
           }
         }
       }
