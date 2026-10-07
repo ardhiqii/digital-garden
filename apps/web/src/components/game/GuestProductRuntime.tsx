@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ProductActivityPanel } from './ProductActivityPanel'
 import { EncounterReveal } from './EncounterReveal'
 import { CompanionSwitcher } from './CompanionSwitcher'
@@ -28,6 +28,11 @@ import {
 } from '@/lib/game/guest-profile'
 import { normalizeMarkdownEvents, type MarkdownFileSnapshot } from '@/lib/game/markdown-events'
 import { MARKDOWN_SCAN_EVENT, type MarkdownScanDetail } from '@/lib/garden-fs/scan-dispatch'
+import {
+  loadScanSummaries,
+  saveScanSummary,
+  summarizeScanFiles,
+} from '@/lib/game/scan-summary-store'
 import { canonicalizeProductEvent } from '@/lib/sync/product-event-id'
 
 const LEDGER_KEY = 'terrarium:guest-event-ledger'
@@ -150,7 +155,6 @@ function recordBaseline(profile: GuestProfile, sourceId: string, files: readonly
 export function GuestProductRuntime() {
   const [state, setState] = useState<ProductState | null>(null)
   const [revealedDraws, setRevealedDraws] = useState<string[]>(() => loadRevealedDraws())
-  const previousScans = useRef(new Map<string, MarkdownFileSnapshot[]>())
 
   useEffect(() => {
     const profile = currentProfile()
@@ -177,12 +181,22 @@ export function GuestProductRuntime() {
       if (!detail || !detail.sourceId || !Array.isArray(detail.files)) return
       const profile = currentProfile()
       if (!profile) return
-      const hasPreviousScan = previousScans.current.has(detail.sourceId)
-      const previous = previousScans.current.get(detail.sourceId) ?? []
-      if (!hasPreviousScan) {
+
+      // The scan's memory comes from storage, not from a ref. It used to live in
+      // a `useRef`, so closing the tab discarded it and the next visit re-baselined
+      // everything and awarded nothing: a user writing in Obsidian daily earned XP
+      // for almost none of it. `null` means this folder has genuinely never been
+      // seen, which is the only case that should baseline.
+      const stored = loadScanSummaries(storage())[detail.sourceId] ?? null
+      if (!stored) {
         // The first observation is the source baseline. Existing notes are
         // history for identity/context, not retroactive XP.
-        previousScans.current.set(detail.sourceId, detail.files)
+        const summary = {
+          sourceId: detail.sourceId,
+          observedAt: new Date().toISOString(),
+          files: summarizeScanFiles(detail.files),
+        }
+        saveScanSummary(storage(), summary)
         const baselineProfile = recordBaseline(profile, detail.sourceId, detail.files)
         if (baselineProfile !== profile) {
           saveGuestProfile(storage(), baselineProfile)
@@ -191,16 +205,24 @@ export function GuestProductRuntime() {
         setState((current) => current ?? createProductState(baselineProfile, loadLedger(), loadEncounters(), PROTOTYPE_COMPANION_CATALOG))
         return
       }
+
       const normalized = normalizeMarkdownEvents({
         sourceId: detail.sourceId,
         companionId: profile.activeCompanionId,
-        previous,
+        previous: stored.files,
         current: detail.files,
         // The scan's own time, from the clock. Daily caps bucket by this, never
         // by a file's mtime, which the user can set.
         now: new Date().toISOString(),
       })
-      previousScans.current.set(detail.sourceId, detail.files)
+      // Persist the new state of the folder BEFORE applying, so a scan that yields
+      // no events still advances the memory. Otherwise the same "changed" diff
+      // would be recomputed and re-offered on every visit.
+      saveScanSummary(storage(), {
+        sourceId: detail.sourceId,
+        observedAt: new Date().toISOString(),
+        files: summarizeScanFiles(detail.files),
+      })
       if (normalized.length === 0) {
         setState((current) => current ?? createProductState(profile, loadLedger(), loadEncounters(), PROTOTYPE_COMPANION_CATALOG))
         return

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CONTENT_DAILY_LIMITS, normalizeMarkdownEvents } from './markdown-events'
+import { summarizeScanFiles } from './scan-summary-store'
 
 const companionId = 'pikachu-default'
 /** Scan time: the trusted clock the daily caps bucket by. */
@@ -86,19 +87,14 @@ describe('normalizeMarkdownEvents', () => {
   })
 
   it('is quiet for an unchanged scan and only counts net new words on edits', () => {
-    const previous = [
-      {
-        path: 'note.md',
-        content: 'one two three four five',
-        modifiedAt: '2026-08-27T09:00:00.000Z',
-      },
-    ]
+    const previous = [{ path: 'note.md', content: 'one two three four five', modifiedAt: '2026-08-27T09:00:00.000Z' }]
+    const previousSummary = summarizeScanFiles(previous)
 
     expect(
       normalizeMarkdownEvents({
         sourceId: 'vault:main',
         companionId,
-        previous,
+        previous: previousSummary,
         current: previous,
         now,
       }),
@@ -107,7 +103,7 @@ describe('normalizeMarkdownEvents', () => {
     const edited = normalizeMarkdownEvents({
       sourceId: 'vault:main',
       companionId,
-      previous,
+      previous: previousSummary,
       current: [
         {
           ...previous[0],
