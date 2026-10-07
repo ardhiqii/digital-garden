@@ -19,6 +19,7 @@ import {
 import { PROTOTYPE_COMPANION_CATALOG } from './companion-catalog'
 import { createGuestProfile, type GuestProfile } from './guest-profile'
 import { applyEncounterDraws } from './product-state'
+import { hatchEgg, pendingEggs } from './companion-eggs'
 
 const catalog = PROTOTYPE_COMPANION_CATALOG
 const NOW = '2026-10-07T12:00:00.000Z'
@@ -124,11 +125,11 @@ describe('duplicates convert to Essence', () => {
   })
 })
 
-describe('the collection actually grows', () => {
-  it('a first claim appends the drawn companion to the collection', () => {
-    // The regression: the daily path wrote only the encounter state, so the draw
-    // appeared in `encounters.draws` while the collection stayed at one. The draw
-    // had happened and nothing said so.
+describe('the draw is handed over as an egg', () => {
+  it('a first claim lays an egg rather than adding to the collection', () => {
+    // The draw used to land straight in the collection. It now becomes an egg the
+    // user opens, so an unhatched companion must NOT count toward the collection
+    // (which is what the assignment bound reads).
     const profile: GuestProfile = {
       ...createGuestProfile({ guestId: 'g', starterCompanionId: 'pikachu-family', now: NOW }),
       collection: [
@@ -139,10 +140,24 @@ describe('the collection actually grows', () => {
     const grown = applyEncounterDraws(profile, claimed.newDraws, NOW)
 
     expect(claimed.newDraws).toHaveLength(1)
-    expect(grown.collection).toHaveLength(2)
-    expect(grown.collection[1]?.companionId).toBe(claimed.newDraws[0]?.selectedCompanionId)
-    // The reference id is the draw id, so the two paths produce identical entries.
-    expect(grown.collection[1]?.referenceId).toBe(claimed.newDraws[0]?.id)
+    expect(pendingEggs(grown)).toHaveLength(1)
+    expect(grown.collection).toHaveLength(1)
+  })
+
+  it('keeps the companion out of the collection until the egg is opened', () => {
+    const profile = createGuestProfile({ guestId: 'g', starterCompanionId: 'pikachu-family', now: NOW })
+    const claimed = claimDailyDraw(createEncounterState(), new Date('2026-10-07T12:00:00'), catalog, [])
+    const laid = applyEncounterDraws(profile, claimed.newDraws, NOW)
+
+    const egg = pendingEggs(laid)[0]
+    expect(egg).toBeDefined()
+    const outcome = hatchEgg(laid, egg!.drawId, NOW)
+    expect(outcome.ok).toBe(true)
+    if (!outcome.ok) return
+
+    expect(pendingEggs(outcome.profile)).toHaveLength(0)
+    expect(outcome.profile.collection).toHaveLength(2)
+    expect(outcome.profile.collection[1]?.companionId).toBe(claimed.newDraws[0]?.selectedCompanionId)
   })
 
   it('is a no-op when there is nothing new to draw', () => {
@@ -150,20 +165,16 @@ describe('the collection actually grows', () => {
     expect(applyEncounterDraws(profile, [], NOW)).toBe(profile)
   })
 
-  it('keeps a duplicate in the collection, because duplicates are what bank Essence', () => {
-    const profile: GuestProfile = {
-      ...createGuestProfile({ guestId: 'g', starterCompanionId: 'pikachu-family', now: NOW }),
-      collection: [
-        { referenceId: 'g:starter', companionId: 'pikachu-family', acquiredAt: NOW, acquisition: 'starter' },
-      ],
-    }
+  it('lays no egg for a duplicate, because the duplicate was already banked as Essence', () => {
+    const profile = createGuestProfile({ guestId: 'g', starterCompanionId: 'pikachu-family', now: NOW })
     // Own every species, so the draw is necessarily a duplicate.
     const owned = catalog.list().map((c) => c.id)
     const claimed = claimDailyDraw(createEncounterState(), new Date('2026-10-07T12:00:00'), catalog, owned)
     const grown = applyEncounterDraws(profile, claimed.newDraws, NOW)
 
     expect(claimed.newDraws[0]?.isDuplicate).toBe(true)
-    expect(grown.collection).toHaveLength(2)
+    expect(pendingEggs(grown)).toHaveLength(0)
+    expect(grown.collection).toHaveLength(1)
   })
 })
 

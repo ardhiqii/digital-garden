@@ -62,6 +62,14 @@ export interface RepoAssignmentRecord {
   assignedAt: string
 }
 
+export interface PendingEggRecord {
+  /** The draw that produced it. Becomes the collection `referenceId` on hatch. */
+  drawId: string
+  /** Catalog id, for drawing the egg in its species' colours. */
+  companionId: string
+  laidAt: string
+}
+
 export interface GuestProfile {
   schemaVersion: number
   guestId: string
@@ -70,6 +78,14 @@ export interface GuestProfile {
   activeCompanionId: string
   sourceBaselines: readonly LocalSourceBaseline[]
   collection: readonly GuestCollectionReference[]
+  /**
+   * Companions drawn but not yet opened.
+   *
+   * OPTIONAL, and read as `?? []`, for the same reason as `assignments`: a
+   * required field would fail validation for every profile written before eggs
+   * existed, and the user would be silently reset to a fresh starter.
+   */
+  eggs?: readonly PendingEggRecord[]
   /**
    * Which companion is dressed onto which repository, if any.
    *
@@ -138,6 +154,7 @@ export function createGuestProfile({
         acquisition: 'starter',
       },
     ],
+    eggs: [],
     assignments: [],
     recoverabilityWarning: {
       status: 'unseen',
@@ -247,7 +264,40 @@ function validateGuestProfile(value: unknown): void {
   }
 
   validateWarning(value.recoverabilityWarning)
+  validateEggs(value.eggs, referenceIds)
   validateAssignments(value.assignments, referenceIds)
+}
+
+/**
+ * Eggs are validated against the collection read alongside them.
+ *
+ * An egg whose draw is already in the collection would hatch into a second
+ * collection entry for one roll, and the profile is user-writable, so this has to
+ * hold on READ and not only on write.
+ */
+function validateEggs(value: unknown, ownedReferenceIds: ReadonlySet<string>): void {
+  // Absent is valid: every profile written before eggs existed.
+  if (value === undefined) return
+  if (!Array.isArray(value)) {
+    throw new TypeError('eggs must be an array')
+  }
+
+  const drawIds = new Set<string>()
+  for (const egg of value) {
+    if (!isRecord(egg)) throw new TypeError('Invalid egg')
+    assertNonEmptyString(egg.drawId, 'drawId')
+    assertNonEmptyString(egg.companionId, 'companionId')
+    assertNonEmptyString(egg.laidAt, 'laidAt')
+
+    if (drawIds.has(egg.drawId)) {
+      throw new TypeError('eggs contains a duplicate drawId')
+    }
+    drawIds.add(egg.drawId)
+
+    if (ownedReferenceIds.has(egg.drawId)) {
+      throw new TypeError('egg is already hatched into the collection')
+    }
+  }
 }
 
 /**
