@@ -52,6 +52,16 @@ export interface GuestRecoverabilityWarning {
   updatedAt: string
 }
 
+export interface RepoAssignmentRecord {
+  /** GitHub's numeric repository id, stable across renames. */
+  repositoryId: string
+  /** The specific companion instance spent. Unique per acquisition. */
+  referenceId: string
+  /** Catalog id, carried so the sprite lookup has something to resolve. */
+  companionId: string
+  assignedAt: string
+}
+
 export interface GuestProfile {
   schemaVersion: number
   guestId: string
@@ -60,6 +70,14 @@ export interface GuestProfile {
   activeCompanionId: string
   sourceBaselines: readonly LocalSourceBaseline[]
   collection: readonly GuestCollectionReference[]
+  /**
+   * Which companion is dressed onto which repository, if any.
+   *
+   * OPTIONAL, and read as `?? []`, so every profile written before this field
+   * existed still loads. A required field would have failed `validateGuestProfile`
+   * for every existing user and silently reset them to a fresh starter.
+   */
+  assignments?: readonly RepoAssignmentRecord[]
   recoverabilityWarning: GuestRecoverabilityWarning
 }
 
@@ -120,6 +138,7 @@ export function createGuestProfile({
         acquisition: 'starter',
       },
     ],
+    assignments: [],
     recoverabilityWarning: {
       status: 'unseen',
       lastShownAt: null,
@@ -228,6 +247,49 @@ function validateGuestProfile(value: unknown): void {
   }
 
   validateWarning(value.recoverabilityWarning)
+  validateAssignments(value.assignments, referenceIds)
+}
+
+/**
+ * Assignments are validated against the collection that was just read.
+ *
+ * A profile is user-writable (it lives in localStorage), so the invariant "you
+ * cannot dress more repositories than you own companions" has to be enforced on
+ * READ, not only on write. Without this, editing localStorage once would let a
+ * single companion dress every repository and the bound would be decorative.
+ */
+function validateAssignments(
+  value: unknown,
+  ownedReferenceIds: ReadonlySet<string>,
+): void {
+  // Absent is valid: every profile written before assignments existed.
+  if (value === undefined) return
+  if (!Array.isArray(value)) {
+    throw new TypeError('assignments must be an array')
+  }
+
+  const repositoryIds = new Set<string>()
+  const spent = new Set<string>()
+  for (const assignment of value) {
+    if (!isRecord(assignment)) throw new TypeError('Invalid assignment')
+    assertNonEmptyString(assignment.repositoryId, 'repositoryId')
+    assertNonEmptyString(assignment.referenceId, 'referenceId')
+    assertNonEmptyString(assignment.companionId, 'companionId')
+    assertNonEmptyString(assignment.assignedAt, 'assignedAt')
+
+    if (repositoryIds.has(assignment.repositoryId)) {
+      throw new TypeError('assignments contains a duplicate repositoryId')
+    }
+    repositoryIds.add(assignment.repositoryId)
+
+    if (!ownedReferenceIds.has(assignment.referenceId)) {
+      throw new TypeError('assignment references a companion that is not owned')
+    }
+    if (spent.has(assignment.referenceId)) {
+      throw new TypeError('assignments spends the same companion twice')
+    }
+    spent.add(assignment.referenceId)
+  }
 }
 
 function validateSourceBaseline(value: unknown): asserts value is LocalSourceBaseline {
