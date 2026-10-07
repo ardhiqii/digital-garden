@@ -24,6 +24,7 @@ import {
   XP_BY_EVENT_CATEGORY,
   type NormalizedEvent,
 } from './events'
+import { summarizeScanFiles } from './scan-summary-store'
 
 const SOURCE = 'mounted-markdown:test-vault'
 const NOW = '2026-10-01T12:00:00.000Z'
@@ -40,7 +41,11 @@ function scan({ sourceId = SOURCE, previous, current, now = NOW }: ScanInput): r
   return normalizeMarkdownEvents({
     sourceId,
     companionId: 'pikachu-family',
-    previous,
+    // The normalizer takes summaries for `previous`, which is what makes the
+    // scan memory persistable at all. Summarising here keeps these tests
+    // expressing the intent ("this is what the folder looked like before")
+    // rather than the storage format.
+    previous: summarizeScanFiles(previous),
     current,
     now,
   })
