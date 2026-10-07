@@ -17,8 +17,11 @@ import {
   localDay,
 } from './daily-draw'
 import { PROTOTYPE_COMPANION_CATALOG } from './companion-catalog'
+import { createGuestProfile, type GuestProfile } from './guest-profile'
+import { applyEncounterDraws } from './product-state'
 
 const catalog = PROTOTYPE_COMPANION_CATALOG
+const NOW = '2026-10-07T12:00:00.000Z'
 
 /** Build a Date from local parts, so the test does not depend on the runner's TZ. */
 function at(y: number, m: number, d: number, h = 12): Date {
@@ -118,6 +121,49 @@ describe('duplicates convert to Essence', () => {
     const r = claimDailyDraw(createEncounterState(), at(2026, 10, 7), catalog, [])
     expect(r.newDraws[0]?.isDuplicate).toBe(false)
     expect(r.newDraws[0]?.essenceAwarded).toBe(0)
+  })
+})
+
+describe('the collection actually grows', () => {
+  it('a first claim appends the drawn companion to the collection', () => {
+    // The regression: the daily path wrote only the encounter state, so the draw
+    // appeared in `encounters.draws` while the collection stayed at one. The draw
+    // had happened and nothing said so.
+    const profile: GuestProfile = {
+      ...createGuestProfile({ guestId: 'g', starterCompanionId: 'pikachu-family', now: NOW }),
+      collection: [
+        { referenceId: 'g:starter', companionId: 'pikachu-family', acquiredAt: NOW, acquisition: 'starter' },
+      ],
+    }
+    const claimed = claimDailyDraw(createEncounterState(), new Date('2026-10-07T12:00:00'), catalog, ['pikachu-family'])
+    const grown = applyEncounterDraws(profile, claimed.newDraws, NOW)
+
+    expect(claimed.newDraws).toHaveLength(1)
+    expect(grown.collection).toHaveLength(2)
+    expect(grown.collection[1]?.companionId).toBe(claimed.newDraws[0]?.selectedCompanionId)
+    // The reference id is the draw id, so the two paths produce identical entries.
+    expect(grown.collection[1]?.referenceId).toBe(claimed.newDraws[0]?.id)
+  })
+
+  it('is a no-op when there is nothing new to draw', () => {
+    const profile = createGuestProfile({ guestId: 'g', starterCompanionId: 'pikachu-family', now: NOW })
+    expect(applyEncounterDraws(profile, [], NOW)).toBe(profile)
+  })
+
+  it('keeps a duplicate in the collection, because duplicates are what bank Essence', () => {
+    const profile: GuestProfile = {
+      ...createGuestProfile({ guestId: 'g', starterCompanionId: 'pikachu-family', now: NOW }),
+      collection: [
+        { referenceId: 'g:starter', companionId: 'pikachu-family', acquiredAt: NOW, acquisition: 'starter' },
+      ],
+    }
+    // Own every species, so the draw is necessarily a duplicate.
+    const owned = catalog.list().map((c) => c.id)
+    const claimed = claimDailyDraw(createEncounterState(), new Date('2026-10-07T12:00:00'), catalog, owned)
+    const grown = applyEncounterDraws(profile, claimed.newDraws, NOW)
+
+    expect(claimed.newDraws[0]?.isDuplicate).toBe(true)
+    expect(grown.collection).toHaveLength(2)
   })
 })
 
