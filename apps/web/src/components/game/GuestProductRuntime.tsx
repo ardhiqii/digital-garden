@@ -15,6 +15,7 @@ import {
   type EncounterSignals,
 } from '@/lib/game/encounters'
 import { PROTOTYPE_COMPANION_CATALOG } from '@/lib/game/companion-catalog'
+import { claimDailyDraw, isDailyDrawDue } from '@/lib/game/daily-draw'
 import {
   createProductState,
   applyProductEvents,
@@ -159,9 +160,32 @@ export function GuestProductRuntime() {
   useEffect(() => {
     const profile = currentProfile()
     if (!profile) return
+
     // Hydrate from browser-local state after the client mounts.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setState(createProductState(profile, loadLedger(), loadEncounters(), PROTOTYPE_COMPANION_CATALOG))
+
+    // THE DAILY DRAW. Claimed on arrival, once per local calendar day, gated by
+    // the day id being in `processedTriggerIds`. Deliberately here rather than
+    // inside the scan handler: a user who opens the app but has no folder
+    // mounted, or whose folder is unchanged, still gets their companion for
+    // showing up. Hooking it to a scan would make the reward conditional on
+    // writing, which is the opposite of what a daily login reward is for.
+    {
+      const encounters = loadEncounters()
+      if (isDailyDrawDue(encounters, new Date())) {
+        const claimed = claimDailyDraw(
+          encounters,
+          new Date(),
+          PROTOTYPE_COMPANION_CATALOG,
+          profile.collection.map((entry) => entry.companionId),
+        )
+        if (claimed.claimed) {
+          saveEncounters(claimed.state)
+          setState(createProductState(profile, loadLedger(), claimed.state, PROTOTYPE_COMPANION_CATALOG))
+        }
+      }
+    }
 
     const onProfileUpdated = () => {
       const nextProfile = currentProfile()
