@@ -1,8 +1,17 @@
 /**
  * Turns two local Markdown scans into normalized, local-provenance events.
  * Contents are inspected in memory and never included in an event payload.
+ *
+ * THE `previous` SIDE IS A SUMMARY, NOT THE FILES. It used to be full snapshots
+ * with content, which made the scan memory impossible to persist (a second copy
+ * of the vault) and so lived in a `useRef` that a page reload threw away. The
+ * delta a scan needs is only "did this path exist" and "is the content the same",
+ * both answerable from a hash plus a word count. So the memory is
+ * `MarkdownFileSummary` (see `scan-summary-store.ts`), and this function cannot
+ * read an old note's text even in principle.
  */
 import { asCompanionId, makeEventId, type CompanionId, type EventCap, type NormalizedEvent } from './events'
+import type { MarkdownFileSummary } from './scan-summary-store'
 
 export interface MarkdownFileSnapshot {
   path: string
@@ -13,7 +22,8 @@ export interface MarkdownFileSnapshot {
 export interface MarkdownEventInput {
   sourceId: string
   companionId: CompanionId | string
-  previous: readonly MarkdownFileSnapshot[]
+  /** What the folder looked like last time, as summaries. Empty for a new folder. */
+  previous: readonly MarkdownFileSummary[]
   current: readonly MarkdownFileSnapshot[]
   /**
    * When the scan ran, from the trusted clock.
@@ -183,10 +193,11 @@ export function normalizeMarkdownEvents(input: MarkdownEventInput): readonly Nor
 
   for (const [path, file] of after) {
     const previous = before.get(path)
-    const changed = !previous || previous.content !== file.content
-    if (!changed) continue
-
     const revision = hash(file.content)
+    // Change detection now compares hashes rather than raw text: the stored
+    // memory has no text to compare against, which is the point.
+    const changed = !previous || previous.hash !== revision
+    if (!changed) continue
 
     // `new-note` is identified by CONTENT, not by path, so moving or renaming a
     // file does not re-earn the bonus for the same note. Renaming is a real
@@ -206,7 +217,7 @@ export function normalizeMarkdownEvents(input: MarkdownEventInput): readonly Nor
       )
     }
 
-    const oldWords = previous ? wordCount(previous.content) : 0
+    const oldWords = previous ? previous.words : 0
     const newWords = wordCount(file.content)
     const additionalBuckets = Math.max(0, Math.floor((newWords - oldWords) / 100))
     for (let bucket = 1; bucket <= additionalBuckets; bucket += 1) {
@@ -222,7 +233,7 @@ export function normalizeMarkdownEvents(input: MarkdownEventInput): readonly Nor
       )
     }
 
-    const oldLinks = new Set(previous ? links(previous.content) : [])
+    const oldLinks = new Set(previous ? previous.linkTargets : [])
     const knownTitles = new Set([...after.keys()].map((item) => item.replace(/\.(?:md|mdx)$/iu, '').split('/').pop()!.toLowerCase()))
     for (const target of [...new Set(links(file.content))]) {
       if (!oldLinks.has(target) && knownTitles.has(target)) {

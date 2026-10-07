@@ -196,9 +196,18 @@ The detailed acceptance criteria for each phase are in [`PLAN.md`](PLAN.md).
 
 ### 1. Finish persistent local source snapshots
 
-Persist compact per-file scan summaries so changes made while the website is
-closed can be detected without storing a second copy of a large vault in
-ordinary localStorage. Keep the raw note boundary local.
+**Done.** The scan's memory of "what did this folder look like last time" lived
+in a `useRef`, so closing the tab discarded it, the next visit treated every file
+as new, re-baselined, and awarded nothing. A user writing in Obsidian daily and
+opening the site occasionally earned XP for almost none of it. It is now
+`lib/game/scan-summary-store.ts`: per-file summaries (path, content hash, body
+word count, link count, link targets, mtime) persisted per folder, with the oldest
+folders evicted past eight and a corrupt entry degrading to a re-baseline rather
+than a broken page. The raw note boundary is unchanged: a hash says a note
+changed and nothing about what it now says.
+
+`normalizeMarkdownEvents` now takes summaries for its `previous` side, so the
+normalizer cannot read an old note's text even in principle.
 
 ### 2. Verify hosted GitHub persistence and ledger checkpoints
 
