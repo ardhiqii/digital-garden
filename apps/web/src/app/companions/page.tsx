@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { getCreatureState } from '@/lib/game/state'
 import { STAGES } from '@/lib/game/types'
 import { slotLabel } from '@/lib/game/stages'
-import { getOwnerCollection, getClusterCollection } from '@/lib/game/collection'
 import { PROTOTYPE_COMPANION_CATALOG } from '@/lib/game/companion-catalog'
 import { createGuestProfile } from '@/lib/game/guest-profile'
 import { restoreProductStateFromSnapshot } from '@/lib/sync/product-snapshot'
@@ -14,11 +13,8 @@ import { getSessionProvider } from '@/lib/sync/session'
 import { CreatureSprite } from '@/components/game/CreatureSprite'
 import { StageLine } from '@/components/game/StageLine'
 import { ItemDrawer } from '@/components/game/ItemDrawer'
-import { CollectionGrid } from '@/components/game/CollectionGrid'
+import { OwnedCompanionGrid } from '@/components/game/OwnedCompanionGrid'
 import { ProductActivityPanel } from '@/components/game/ProductActivityPanel'
-
-const OWNER_LOGIN = process.env.GITHUB_LOGIN
-const TOKEN = process.env.GITHUB_TOKEN
 
 export const metadata: Metadata = {
   title: 'Companions',
@@ -82,24 +78,13 @@ export default async function CompanionsPage() {
   // box, so the goal stays legible.
   const stageSprites = await Promise.all(
     STAGES.map((stage) => CreatureSprite({ stage: stage.id, scale: 3 }))
-  )
+    )
 
-  // The collection: one creature per repo, each species-assigned by
-  // language/age/size (species-assign.ts), never the same four Pokemon
-  // repeated. Never throws; an empty array just renders the empty state in
-  // CollectionGrid, so a missing token or a GitHub outage degrades the page
-  // rather than breaking it.
-  const repoCollection = OWNER_LOGIN
-    ? await getOwnerCollection({ login: OWNER_LOGIN, token: TOKEN })
-    : []
-
-  // Cluster companions (T22): one per tag with five or more notes, each
-  // inheriting its cluster's own XP rather than starting at stage 1 (see
-  // clusters.ts). Notes-only and synchronous, so this never depends on
-  // GitHub reachability. Listed first: they are native to this Terrarium's own
-  // content, where repo creatures are commit-driven.
-  const clusterCollection = getClusterCollection()
-  const collection = [...clusterCollection, ...repoCollection]
+    // The repository and cluster archive moved to /repos. It used to be built
+    // here and rendered under a "Garden collection" heading, which read as the
+    // user's own collection; it is a view over where activity came from, not over
+    // what the user owns. Building it here now would also mean an unnecessary
+    // GitHub listing request on every page load.
 
   const stats = state.stats
   const gardenStatRows: { label: string; value: string }[] = [
@@ -249,24 +234,31 @@ export default async function CompanionsPage() {
       )}
 
       {/*
-        The collection. A separate section, deliberately never merged into
-        the evolution line above: the primary companion (driven by notes plus
-        all commits) is the main one, and everything below is the collection
-        that grows around it. See CollectionGrid's header comment.
+        The user's own companions.
+
+        This section used to render one generated creature per GitHub repository
+        under the heading "Garden collection", and a user with 24 repositories
+        read those 24 tiles as 24 companions they already owned. They owned one.
+        The repo creatures were never wrong, but presenting them as the
+        collection was, so they moved to /repos and this shows what the user
+        actually owns.
       */}
       <section>
         <h2 className="font-ui text-xl font-semibold tracking-tighter mb-2">
-          {accountIsSignedIn ? 'Garden collection' : 'Collection'}
+          Your companions
         </h2>
         <p
           className="font-prose text-sm leading-relaxed mb-5 max-w-2xl"
           style={{ color: 'var(--ink-muted)' }}
         >
-          {accountIsSignedIn
-            ? 'This local archive is kept separate from the account-scoped product collection shown in the synced condition above.'
-            : <>A tag that reaches five notes hatches its own companion, themed by what the cluster is about and already grown from that cluster&apos;s own words, links, and backlinks. Every repo also creates its own creature from that repo&apos;s own commit activity, species-assigned by primary language, so the collection actually looks like a collection.</>}
+          One companion is granted when you first arrive, and another for every
+          day you come back. A companion can be dressed onto one of your
+          repositories, and each one is spent on exactly one. The repository
+          archive lives in <Link href="/repos" className="underline decoration-dotted underline-offset-2" style={{ color: 'var(--accent)' }}>Repos</Link>.
         </p>
-        <CollectionGrid entries={collection} />
+        <OwnedCompanionGrid
+          sprite={await CreatureSprite({ stage: 'sporeling', scale: 2 })}
+        />
       </section>
     </div>
   )

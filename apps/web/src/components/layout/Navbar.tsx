@@ -33,6 +33,7 @@ const BASE_NAV_LINKS = [
   { href: '/github', label: 'GitHub' },
   { href: '/graph', label: 'Graph' },
   { href: '/companions', label: 'Companions' },
+  { href: '/repos', label: 'Repos' },
   { href: '/guide', label: 'Guide' },
 ]
 

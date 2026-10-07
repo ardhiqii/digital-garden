@@ -17,6 +17,7 @@ import {
   createEncounterState,
   type EncounterSignals,
   type EncounterState,
+  type PersistedEncounterDraw,
 } from './encounters'
 import { resolveCompanionProgression, type CompanionCatalog } from './companion-catalog'
 import type { GuestCollectionReference, GuestProfile } from './guest-profile'
@@ -167,6 +168,39 @@ export function createProductState(
  * Replaying the same batch is safe because the event ledger and trigger ID are
  * both idempotent.
  */
+/**
+ * Fold freshly drawn companions into the profile's collection.
+ *
+ * WHY THIS IS EXPORTED RATHER THAN INLINED: there are two paths that produce
+ * draws, the activity meter (`applyProductEvents`) and the daily claim
+ * (`claimDailyDraw`). The daily path originally wrote only the encounter state
+ * and left the collection untouched, so the draw appeared in `encounters.draws`
+ * while the collection stayed at one companion. Both paths now share this, so a
+ * draw cannot land in one place and not the other.
+ *
+ * Duplicates are appended, not filtered: PRODUCT.md states the collection is
+ * "every companion the user has encountered, including duplicates", and each
+ * duplicate is what converted to Essence in the first place.
+ */
+export function applyEncounterDraws(
+  profile: GuestProfile,
+  newDraws: readonly PersistedEncounterDraw[],
+  now: string,
+): GuestProfile {
+  if (newDraws.length === 0) return profile
+  const newReferences: GuestCollectionReference[] = newDraws.map((draw) => ({
+    referenceId: draw.id,
+    companionId: draw.selectedCompanionId,
+    acquiredAt: now,
+    acquisition: 'encounter',
+  }))
+  return {
+    ...profile,
+    updatedAt: now,
+    collection: [...profile.collection, ...newReferences],
+  }
+}
+
 export function applyProductEvents(
   state: ProductState,
   incoming: readonly NormalizedEvent[],
@@ -192,19 +226,7 @@ export function applyProductEvents(
     catalog,
   )
 
-  const newReferences: GuestCollectionReference[] = encounterResult.newDraws.map((draw) => ({
-    referenceId: draw.id,
-    companionId: draw.selectedCompanionId,
-    acquiredAt: new Date().toISOString(),
-    acquisition: 'encounter',
-  }))
-  const profile = newReferences.length
-    ? {
-        ...state.profile,
-        updatedAt: new Date().toISOString(),
-        collection: [...state.profile.collection, ...newReferences],
-      }
-    : state.profile
+  const profile = applyEncounterDraws(state.profile, encounterResult.newDraws, new Date().toISOString())
 
   return createProductState(profile, ledger, encounterResult.state, catalog)
 }
