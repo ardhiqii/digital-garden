@@ -3,6 +3,7 @@ import {
   buildAuthorizeUrl,
   exchangeCodeForToken,
   fetchGithubIdentity,
+  resolveAuthBaseUrl,
   resolveRedirectUri,
   type OAuthConfig,
 } from './github-oauth'
@@ -121,6 +122,38 @@ describe('resolveRedirectUri', () => {
     expect(resolveRedirectUri('http://internal:3000')).toBe(
       'https://garden.example.com/api/auth/callback'
     )
+  })
+})
+
+describe('resolveAuthBaseUrl', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('falls back to the request origin when unconfigured, so local dev needs no setup', () => {
+    expect(resolveAuthBaseUrl('http://localhost:3000')).toBe('http://localhost:3000')
+  })
+
+  it('prefers AUTH_BASE_URL so the browser is never sent to the container address', () => {
+    // The regression this exists for: the container publishes on 0.0.0.0, so the
+    // request origin reads back as https://0.0.0.0:3101. redirect_uri was already
+    // corrected for that, but the redirect AFTER a successful exchange was not,
+    // and the browser landed on ERR_ADDRESS_INVALID. The sign-in had in fact
+    // succeeded, which is what made the failure so misleading.
+    vi.stubEnv('AUTH_BASE_URL', 'https://garden.example.com')
+    expect(resolveAuthBaseUrl('https://0.0.0.0:3101')).toBe('https://garden.example.com')
+  })
+
+  it('strips a trailing slash so a return path does not double up', () => {
+    vi.stubEnv('AUTH_BASE_URL', 'https://garden.example.com/')
+    expect(resolveAuthBaseUrl('http://internal:3000')).toBe('https://garden.example.com')
+  })
+
+  it('ignores a blank AUTH_BASE_URL rather than producing an empty base', () => {
+    // An empty value is how a placeholder lands in .env. Treating it as set
+    // would make every redirect relative to nothing.
+    vi.stubEnv('AUTH_BASE_URL', '   ')
+    expect(resolveAuthBaseUrl('http://localhost:3000')).toBe('http://localhost:3000')
   })
 })
 

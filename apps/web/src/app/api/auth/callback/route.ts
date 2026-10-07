@@ -25,6 +25,7 @@ import {
   exchangeCodeForToken,
   fetchGithubIdentity,
   getOAuthConfig,
+  resolveAuthBaseUrl,
   resolveRedirectUri,
 } from '@/lib/sync/github-oauth'
 import { safeReturnPath } from '@/lib/sync/oauth-return-path'
@@ -63,7 +64,7 @@ function statesMatch(a: string, b: string): boolean {
 function backToOrigin(request: NextRequest, params?: Record<string, string>): NextResponse {
   const url = new URL(
     safeReturnPath(request.cookies.get(OAUTH_RETURN_COOKIE)?.value),
-    request.nextUrl.origin,
+    resolveAuthBaseUrl(request.nextUrl.origin),
   )
   if (params) {
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)

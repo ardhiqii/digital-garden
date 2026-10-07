@@ -82,6 +82,25 @@ export function resolveRedirectUri(origin: string): string {
   return `${base.replace(/\/+$/, '')}/api/auth/callback`
 }
 
+/**
+ * The origin the browser actually used, for building URLs the browser will follow.
+ *
+ * WHY THIS IS NOT `request.nextUrl.origin`: behind the tunnel the container
+ * publishes on `0.0.0.0`, so the app reads its own origin as
+ * `https://0.0.0.0:3101`. `redirect_uri` was already corrected for this, but
+ * the redirect AFTER a successful exchange was not: the user authorized
+ * correctly and was then sent to `https://0.0.0.0:3101/`, which no browser can
+ * open (`ERR_ADDRESS_INVALID`). The login had worked; only the landing was
+ * broken, so the failure looked like a failed sign-in.
+ *
+ * Falls back to the request origin when `AUTH_BASE_URL` is unset, which keeps
+ * local development working with no configuration.
+ */
+export function resolveAuthBaseUrl(origin: string): string {
+  const override = process.env.AUTH_BASE_URL?.trim()
+  return override && override.length > 0 ? override.replace(/\/+$/, '') : origin
+}
+
 async function fetchWithTimeout(
   url: string,
   init: RequestInit
