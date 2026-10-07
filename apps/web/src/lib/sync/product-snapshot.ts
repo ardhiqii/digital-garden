@@ -145,9 +145,33 @@ export interface ProductSnapshot {
   readonly companions: readonly ProductSnapshotCompanion[]
   readonly collection: readonly ProductSnapshotCollectionReference[]
   readonly sourceBaselines: readonly ProductSnapshotSourceBaseline[]
+  /**
+   * Companions drawn but not yet opened, and which companion dresses which repo.
+   *
+   * OPTIONAL because a snapshot written by an older client has neither, and the
+   * validator would otherwise reject every payload already in flight. Both are read
+   * as `?? []` on restore.
+   */
+  readonly eggs?: readonly ProductSnapshotEgg[]
+  readonly assignments?: readonly ProductSnapshotAssignment[]
   readonly recoverabilityWarning: ProductSnapshotWarning
   readonly events: readonly ProductSnapshotEvent[]
   readonly encounters: ProductSnapshotEncounters
+}
+
+/** A companion drawn but not yet opened. Mirrors `PendingEgg`. */
+export interface ProductSnapshotEgg {
+  readonly drawId: string
+  readonly companionId: string
+  readonly laidAt: string
+}
+
+/** One companion dressed onto one repository. Mirrors `RepoAssignment`. */
+export interface ProductSnapshotAssignment {
+  readonly repositoryId: string
+  readonly referenceId: string
+  readonly companionId: string
+  readonly assignedAt: string
 }
 
 /** Canonical name for the new product sync payload. */
@@ -387,6 +411,11 @@ export function buildProductSnapshot(
     companions: state.companions.map(snapshotCompanion),
     collection: profile.collection.map(snapshotCollectionReference),
     sourceBaselines: profile.sourceBaselines.map(snapshotBaseline),
+    // Carried so an unopened egg survives a sync and a restore on another device.
+    // Without these, signing in would silently discard every companion the user
+    // had drawn but not yet opened.
+    eggs: (profile.eggs ?? []).map((egg) => ({ ...egg })),
+    assignments: (profile.assignments ?? []).map((assign) => ({ ...assign })),
     recoverabilityWarning: { ...profile.recoverabilityWarning },
     events: state.ledger.events.map((event) => {
       const eventId = opaqueId(event.eventId, 'event')
@@ -554,7 +583,10 @@ export function validateProductSnapshot(value: unknown): asserts value is Produc
   assertExactKeys(
     value,
     ['schemaVersion', 'guestId', 'createdAt', 'updatedAt', 'generatedAt', 'activeCompanionId', 'companions', 'collection', 'sourceBaselines', 'recoverabilityWarning', 'events', 'encounters'],
-    [],
+    // OPTIONAL, not required: a snapshot written by an older client has neither
+    // field, and requiring them would reject every payload already in flight.
+    // Both are read as `?? []` on restore.
+    ['eggs', 'assignments'],
     'Product snapshot',
   )
   if (value.schemaVersion !== PRODUCT_SNAPSHOT_SCHEMA_VERSION) throw new TypeError('Unsupported product snapshot schema version')
@@ -714,6 +746,10 @@ export function restoreProductStateFromSnapshot(
     updatedAt: snapshot.updatedAt,
     activeCompanionId: snapshot.activeCompanionId,
     collection: snapshot.collection.map((reference) => ({ ...reference })),
+    // `?? []` so a snapshot from an older client still restores. Dropping these
+    // would lose unopened eggs and repository assignments on every sync.
+    eggs: (snapshot.eggs ?? []).map((egg) => ({ ...egg })),
+    assignments: (snapshot.assignments ?? []).map((assign) => ({ ...assign })),
     recoverabilityWarning: { ...snapshot.recoverabilityWarning },
   }
   const encounters: EncounterState = {

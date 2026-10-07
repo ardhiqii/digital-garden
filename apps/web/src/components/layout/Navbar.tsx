@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import ThemeToggle from './ThemeToggle'
 import AccountMenu from './AccountMenu'
+import { EggBadge } from './EggBadge'
 import GardenMark from '../GardenMark'
 import { siteConfig } from '@/lib/site-config'
 
@@ -222,6 +223,7 @@ export default function Navbar() {
                   }}
                 >
                   {link.label}
+                  {link.href === '/companions' ? <EggBadge /> : null}
                 </Link>
               )
             })}
@@ -296,6 +298,7 @@ export default function Navbar() {
                   }}
                 >
                   {link.label}
+                  {link.href === '/companions' ? <EggBadge /> : null}
                 </Link>
               )
             })}
