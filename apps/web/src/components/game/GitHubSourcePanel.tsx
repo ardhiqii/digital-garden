@@ -71,7 +71,7 @@ import {
   parseReceiptRepairResponse,
   type ReceiptFailure,
 } from '@/lib/sync/github-receipt-repair'
-import { loginHrefFor } from '@/lib/sync/oauth-return-path'
+import SignInButton from '@/components/layout/SignInButton'
 import {
   addSyncRequestUsage,
   MAX_SYNC_REPOSITORIES,
@@ -1860,9 +1860,9 @@ export function GitHubSourcePanel() {
               {message}
             </p>
           )}
-          <a href={loginHrefFor('/github')} className="ui-row font-ui mt-5 inline-block border px-4 py-2 text-sm" style={{ borderColor: 'var(--ink)', color: 'var(--ink)' }}>
-            Sign in with GitHub
-          </a>
+          <div className="mt-5">
+            <SignInButton path="/github" variant="quiet" className="ui-row border" style={{ borderColor: 'var(--ink)', color: 'var(--ink)' }} />
+          </div>
         </section>
       )}
 

@@ -7,6 +7,7 @@ import { getFollowing } from '@/lib/sync/github-following'
 import { buildLeaderboardEntries } from '@/lib/sync/leaderboard'
 import { LeaderboardList } from '@/components/profile/LeaderboardList'
 import UnverifiedXpNote from '@/components/profile/UnverifiedXpNote'
+import SignInButton from '@/components/layout/SignInButton'
 
 export const metadata: Metadata = {
   title: 'Leaderboard',
@@ -42,7 +43,15 @@ function Shell({ children }: { children: React.ReactNode }) {
   )
 }
 
-function EmptyState({ title, body }: { title: string; body: string }) {
+function EmptyState({
+  title,
+  body,
+  action,
+}: {
+  title: string
+  body: string
+  action?: React.ReactNode
+}) {
   return (
     <div
       className="py-16 text-center max-w-[46ch] mx-auto"
@@ -52,6 +61,7 @@ function EmptyState({ title, body }: { title: string; body: string }) {
       <p className="font-prose text-sm leading-relaxed" style={{ color: 'var(--ink-muted)' }}>
         {body}
       </p>
+      {action ? <div className="mt-6">{action}</div> : null}
     </div>
   )
 }
@@ -65,6 +75,7 @@ export default async function LeaderboardPage() {
         <EmptyState
           title="Sign in to see it"
           body="The leaderboard only makes sense next to people you actually follow. Sign in with GitHub to see which of them have synced a garden."
+          action={<SignInButton path="/leaderboard" />}
         />
       </Shell>
     )
