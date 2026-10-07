@@ -13,6 +13,7 @@ import {
   PROTOTYPE_COMPANION_CATALOG,
   type CompanionDefinition,
 } from '@/lib/game/companion-catalog'
+import SignInButton from '@/components/layout/SignInButton'
 
 const catalog = PROTOTYPE_COMPANION_CATALOG
 const starter = catalog.list()[0]
@@ -245,18 +246,23 @@ export function GuestCompanionOnboarding() {
         </div>
 
         {isWarningVisible && (
-          <div className="flex items-start justify-between gap-4 border p-4" style={{ borderColor: 'var(--rule)', background: 'var(--paper-raised)' }}>
-            <p className="font-ui text-xs leading-relaxed" style={{ color: 'var(--ink-muted)' }}>
-              You are in guest mode. This progress is stored in this browser and can be lost if browser data is cleared or you change devices. Sign in or export a backup when recovery matters.
-            </p>
-            <button
-              type="button"
-              onClick={dismissWarning}
-              className="font-data shrink-0 text-[10px] uppercase tracking-widest"
-              style={{ color: 'var(--ink-muted)' }}
-            >
-              Dismiss
-            </button>
+          <div className="flex flex-col gap-3 border p-4" style={{ borderColor: 'var(--rule)', background: 'var(--paper-raised)' }}>
+            <div className="flex items-start justify-between gap-4">
+              <p className="font-ui text-xs leading-relaxed" style={{ color: 'var(--ink-muted)' }}>
+                You are in guest mode. This progress is stored in this browser and can be lost if browser data is cleared or you change devices. Sign in or export a backup when recovery matters.
+              </p>
+              <button
+                type="button"
+                onClick={dismissWarning}
+                className="font-data shrink-0 text-[10px] uppercase tracking-widest"
+                style={{ color: 'var(--ink-muted)' }}
+              >
+                Dismiss
+              </button>
+            </div>
+            {/* The notice told the user to sign in and gave them nothing to
+                click, so the only way to act on it was to find the Navbar. */}
+            <SignInButton variant="quiet" className="self-start" />
           </div>
         )}
 
