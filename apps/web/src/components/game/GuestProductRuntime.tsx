@@ -45,7 +45,6 @@ import {
   saveBrowserLedger,
 } from '@/lib/game/product-browser-storage'
 import { GUEST_PROFILE_STORAGE_KEY } from '@/lib/game/guest-profile'
-import { planGuestMigration } from '@/lib/game/guest-migration'
 
 const REVEALED_DRAWS_KEY = 'terrarium:guest-revealed-draws'
 const PROFILE_EVENT = 'terrarium:guest-profile-updated'
@@ -161,41 +160,6 @@ export function GuestProductRuntime() {
     // another. The namespace keeps this page on the same data as /github.
     if (!profileKey) return
     const namespace = namespaceFromProfileKey(profileKey)
-
-    // IMPORT THE SIGNED-OUT PROFILE, once, the first time this browser is seen signed
-    // in. Without it, signing in switched which key the app read without moving the
-    // data across, so a user who had collected companions and earned XP while signed
-    // out found a fresh starter and their real profile still under the old key.
-    //
-    // Skipped entirely when the viewer is not signed in: there is no account to import
-    // into, and clearing the guest key would throw their progress away.
-    if (namespace) {
-      try {
-        const guestProfile = loadGuestProfile(storage(), GUEST_PROFILE_STORAGE_KEY)
-        const accountProfile = loadGuestProfile(storage(), profileKey)
-        if (!accountProfile) {
-          // No account profile yet: PRODUCT.md 4.4 says to import the current companion
-          // condition and collection. That is a straight copy under the account key, not
-          // a merge, and passing the guest profile as both sides would have compared it
-          // to itself and quietly done nothing.
-          if (guestProfile) {
-            saveGuestProfile(storage(), guestProfile, profileKey)
-            storage().removeItem(GUEST_PROFILE_STORAGE_KEY)
-            window.dispatchEvent(new Event(PROFILE_EVENT))
-          }
-        } else {
-          const plan = planGuestMigration(guestProfile, accountProfile)
-          if (plan) {
-            saveGuestProfile(storage(), plan.profile, profileKey)
-            storage().removeItem(GUEST_PROFILE_STORAGE_KEY)
-            window.dispatchEvent(new Event(PROFILE_EVENT))
-          }
-        }
-      } catch {
-        // A failed import leaves the guest profile exactly where it was. Losing it to a
-        // cleanup path would be worse than showing the account's copy for one visit.
-      }
-    }
 
     setRevealedDraws(loadRevealedDraws(profileKey))
 

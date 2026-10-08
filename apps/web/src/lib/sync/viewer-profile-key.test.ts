@@ -85,4 +85,31 @@ describe('one resolver for the viewer profile key', () => {
 
     expect(offenders).toEqual([])
   })
+
+  it('the import is started from a component mounted on every route', () => {
+    // THE SECOND BUG, found by asking which page the import actually ran on: it was
+    // wired into /write only, and then into the egg badge, which on a phone lives inside
+    // the hamburger menu. Landing on /github, or signing in on a phone, migrated nothing.
+    const navbar = read('src/components/layout/Navbar.tsx')
+    expect(navbar).toContain('startViewerSession')
+
+    // And it must not depend on a viewport-specific row: the call has to sit in the
+    // component's own effect, not inside the `hidden sm:flex` or `sm:hidden` nav rows.
+    const effect = navbar.slice(navbar.indexOf('useEffect('), navbar.indexOf('const NAV_LINKS'))
+    expect(effect).toContain('startViewerSession')
+  })
+
+  it('/github waits for the import before it may create a profile', () => {
+    // `ensureBrowserGuestProfile` INVENTS a fresh starter when the account key is empty.
+    // Racing the import orphaned the user's real companions under the signed-out key and
+    // showed them a blank one.
+    const panel = read('src/components/game/GitHubSourcePanel.tsx')
+    expect(panel).toContain('ensureViewerSession')
+
+    const waitAt = panel.indexOf('await ensureViewerSession()')
+    const createAt = panel.indexOf('const localState = browserState(namespace)')
+    expect(waitAt).toBeGreaterThan(-1)
+    expect(createAt).toBeGreaterThan(-1)
+    expect(waitAt).toBeLessThan(createAt)
+  })
 })
