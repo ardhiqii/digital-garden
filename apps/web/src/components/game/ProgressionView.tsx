@@ -7,10 +7,27 @@ import {
   loadBrowserEncounters,
   loadBrowserLedger,
 } from '@/lib/game/product-browser-storage'
+import { useViewerProfileKey } from '@/lib/sync/use-viewer-profile-key'
+import { GUEST_PROFILE_STORAGE_KEY } from '@/lib/game/guest-profile'
 import { createProductState, type ProductState } from '@/lib/game/product-state'
 import { PROTOTYPE_COMPANION_CATALOG } from '@/lib/game/companion-catalog'
 import { TITLES, resolveTitle } from '@/lib/game/titles'
 import { resolveAchievements } from '@/lib/game/achievements'
+
+/**
+ * The namespace the product keys use, derived from the profile key.
+ *
+ * `ensureBrowserGuestProfile` and the ledger helpers take a namespace, while the
+ * profile key is `<profile key>:<namespace>`. Deriving one from the other here keeps
+ * this page on the same data as everywhere else; it used to pass no namespace, so a
+ * signed-in user saw ranks and achievements computed from a different profile than
+ * the one /github synced.
+ */
+function namespaceFromProfileKey(profileKey: string): string | undefined {
+  return profileKey === GUEST_PROFILE_STORAGE_KEY
+    ? undefined
+    : profileKey.slice(GUEST_PROFILE_STORAGE_KEY.length + 1)
+}
 
 const RARITY_COLOR: Record<string, string> = {
   common: 'var(--ink-muted)',
@@ -38,21 +55,27 @@ const CATEGORY_LABEL: Record<string, string> = {
 export function ProgressionView() {
   const [state, setState] = useState<ProductState | null>(null)
   const [ready, setReady] = useState(false)
+  const profileKey = useViewerProfileKey()
 
   useEffect(() => {
+    // Wait for the viewer's key: this page used to always read the signed-out
+    // profile, so a signed-in user's ranks and achievements were computed from data
+    // that /github never synced.
+    if (!profileKey) return
     const storage = browserProductStorage()
-    const profile = ensureBrowserGuestProfile(storage, 'pikachu-family')
+    const namespace = namespaceFromProfileKey(profileKey)
+    const profile = ensureBrowserGuestProfile(storage, 'pikachu-family', namespace)
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setState(
       createProductState(
         profile,
-        loadBrowserLedger(storage),
-        loadBrowserEncounters(storage),
+        loadBrowserLedger(storage, namespace),
+        loadBrowserEncounters(storage, namespace),
         PROTOTYPE_COMPANION_CATALOG,
       ),
     )
     setReady(true)
-  }, [])
+  }, [profileKey])
 
   if (!ready || !state) {
     return (
