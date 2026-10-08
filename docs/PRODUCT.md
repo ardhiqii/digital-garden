@@ -599,6 +599,54 @@ Encounters are the main source of dopamine after the first companion.
    which can unlock optional family mastery or cosmetic rewards. Essence does
    not give XP, skip evolution, or act as a general currency.
 
+### 6.1 Eggs
+
+A draw produces an **egg**, not a collection entry. The egg is stored, the user
+opens it, and the companion joins the collection when it hatches.
+
+- **An unhatched companion is not owned.** It is not in the collection and does not
+  count toward the assignment bound in section 6.3, because a companion the user has
+  never met cannot be shown on a repository.
+- **Hatching preserves identity.** The collection entry is keyed on the same draw id
+  the egg was laid with, so anything that referenced the companion before the hatch
+  still resolves afterward.
+- **A duplicate never becomes an egg.** It was already converted to Essence at draw
+  time, so an egg for one would open onto nothing.
+- **Opening is one action.** The egg is a button; there is no second confirmation.
+- **Motion is optional, the hatch is not.** Under `prefers-reduced-motion` the
+  animation does not play, but the sequence still completes and the companion still
+  arrives.
+
+### 6.2 Daily draw
+
+One draw is granted for opening the app on a new **local** calendar day.
+
+- The day boundary is the user's own midnight, not UTC. A user east of UTC must not
+  see their daily draw reset at an arbitrary hour of their morning.
+- The claim is recorded by a `daily:<YYYY-MM-DD>` trigger id in the existing
+  processed-trigger list, so a replayed or duplicated claim is a no-op rather than a
+  second companion.
+- The daily draw is an addition to the activity meter in this section, not a
+  replacement for it.
+
+### 6.3 Dressing a repository
+
+A companion can be dressed onto a repository, so it is the creature that repository
+carries.
+
+- **The bound is how many companions the user owns.** The interface states the
+  collection size, so the number of repositories that can be dressed must equal it.
+  Counting distinct species instead would make the displayed number a lie.
+- **A companion is spent on exactly one repository.** Sharing one across many would
+  make the bound meaningless.
+- **A repository carries one companion.** Assigning a second requires taking the
+  first back.
+- **The rule is enforced on read, not only on write.** The profile is user-writable
+  local storage; an invariant enforced only on the write path is decorative.
+- **Deferred:** the assigned companion is not yet rendered by the badge or device
+  endpoints, which still select a species automatically. The intended end state is
+  that they show **the assigned** companion.
+
 Evolution is controlled by work XP only. When a companion reaches a progression
 threshold, it advances through the valid provider-defined evolution path. A
 duplicate encounter and its Essence never become a requirement for evolution.
