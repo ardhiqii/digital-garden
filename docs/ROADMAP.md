@@ -50,6 +50,41 @@ weighted by transparent work signals. Duplicates become family-specific Essence.
 
 ### New product loop shipped
 
+- Companions arrive as **eggs**. A draw used to land straight in the collection and
+  announce itself in a panel the user read; it now becomes an egg in an inventory
+  that the user opens. Tapping it plays a shake, a crack, and a burst of light in
+  the species' colours before the companion appears. The animation is CSS keyframes
+  and SVG with no new dependency, and the sequence is driven by timers rather than
+  animation events, so a user who prefers reduced motion still ends up with an
+  opened egg instead of a stuck one. An **unhatched companion is not in the
+  collection**: the collection is what the assignment bound counts, so counting an
+  egg would let a user dress a repository with a companion they have never met.
+  Hatching moves it in keyed on the same draw id, so its identity is unchanged.
+  Duplicates never become eggs, because they were already banked as Essence and an
+  egg that opened onto "you already had this" would be a reward that punishes. The
+  navbar carries a badge for waiting eggs, because an egg nobody notices is the
+  same as no egg (`lib/game/companion-eggs.ts`, `components/game/EggHatch.tsx`).
+- A **daily draw** is granted for opening the app on a new local calendar day, so
+  growing a collection no longer depends only on a hidden meter that fills from 100
+  events. It reuses the existing `advanceEncounter` trigger path rather than adding
+  a second draw path, and the day is gated by a `daily:<YYYY-MM-DD>` trigger id in
+  the existing `processedTriggerIds`, so the day is its own record of being claimed.
+  The boundary is **local**, not UTC (`lib/game/daily-draw.ts`).
+- A companion can be **dressed onto a repository**, bounded by how many companions
+  the user owns, with each companion spent on exactly one. The bound is
+  `collection.length` rather than distinct species, because the activity panel
+  already says "N companions" and counting species instead would make that number a
+  lie. Enforced on read as well as write, because the profile lives in
+  `localStorage`. The picker on `/repos` shows spent companions disabled with the
+  repository they are on, rather than hiding them, so the list shrinking as
+  repositories are dressed is explained by display instead of by a refusal
+  (`lib/game/repo-assignments.ts`, `components/game/CompanionPicker.tsx`).
+- **Two things were called "collection".** `/companions` rendered one generated
+  creature per GitHub repository under the heading "Garden collection", and a user
+  with 24 repositories read 24 tiles as 24 companions they owned. They owned one.
+  The generated creatures are a view over where activity came from, not over what
+  the user owns, so they moved to `/repos` and `/companions` now shows the actual
+  collection, with the active companion settable from that page.
 - The mounted-folder source raises its scan in one shared place
   (`lib/garden-fs/scan-dispatch.ts`), and the built-in editor now raises one
   after a save and after a delete. It previously raised none, so a note written
@@ -242,6 +277,35 @@ cloud-delete, guest export, and account-switch flows before exposing public
 companion state widely.
 
 ### 4. Replace legacy collection surfaces
+
+**Partially shipped.** `/companions` now shows the user's actual collection rather
+than one generated creature per repository, and `/repos` carries the generated
+repository and cluster archive under its own name. The active companion is settable
+from `/companions`.
+
+**Open, and deliberately deferred by the owner:** a repository's assigned companion
+is **stored but not yet rendered**. `/api/creature` and `/api/creature.svg` still
+select a species line automatically from the repository's language and ignore the
+assignment. Wiring it is not a one-line change, and the reasons are worth writing
+down so the next attempt does not rediscover them:
+
+- **Two art systems that never meet.** A catalog companion (Pikachu, Ditto) carries
+  PokeAPI asset keys on its forms (`pokeapi:pokemon:pikachu:25`); a species line
+  (grass, ember, …) resolves through `CreatureSprite(speciesLineId)`. The badge and
+  OLED renderers consume the second and cannot currently draw the first.
+- **The public endpoints are cached per `user/repo`** with no notion of whose
+  assignment is being read, so injecting a per-user choice into that cache would
+  serve one person's companion to another.
+- **Assignments live in browser `localStorage`.** An edge device or OLED has no
+  `localStorage` and would have to read them from the server.
+- **`PRODUCT.md` makes public companion visibility opt-in**, and gating the
+  extension payload behind that policy is already an open item in section 3. Exposing
+  an assigned companion publicly must go through that gate rather than around it.
+
+The owner's decision on the deferred work: the device shows **the assigned**
+companion, not a fallback. Until the wiring lands, the automatic species choice is
+what the badge and any device will show.
+
 
 The account archive now reads the trusted product-sync snapshot when one exists,
 keeps synced XP separate from the local garden/cache archive, and reports an
