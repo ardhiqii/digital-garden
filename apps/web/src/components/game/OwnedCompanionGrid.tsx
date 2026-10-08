@@ -29,6 +29,7 @@ import { loadGuestProfile, saveGuestProfile, type GuestProfile } from '@/lib/gam
 import { PROTOTYPE_COMPANION_CATALOG } from '@/lib/game/companion-catalog'
 import { assignments, remainingAssignments } from '@/lib/game/repo-assignments'
 import { hatchEgg, pendingEggs } from '@/lib/game/companion-eggs'
+import { useViewerProfileKey } from '@/lib/sync/use-viewer-profile-key'
 import { EggHatch } from '@/components/game/EggHatch'
 
 export interface OwnedCompanionGridProps {
@@ -88,17 +89,22 @@ function EggTile({
 export function OwnedCompanionGrid({ sprite, eggSprite }: OwnedCompanionGridProps) {
   const [profile, setProfile] = useState<GuestProfile | null>(null)
   const [ready, setReady] = useState(false)
+  const profileKey = useViewerProfileKey()
 
   const read = useCallback(() => {
+    // Wait for the key rather than assuming the signed-out one: on a signed-in
+    // browser that assumption read a different profile from /github, which is how
+    // this page and the GitHub panel came to show different active companions.
+    if (!profileKey) return
     try {
-      setProfile(loadGuestProfile(window.localStorage))
+      setProfile(loadGuestProfile(window.localStorage, profileKey))
     } catch {
       // Storage can be unavailable (private mode, disabled cookies). An empty
       // list is the honest result; the page still explains what a companion is.
       setProfile(null)
     }
     setReady(true)
-  }, [])
+  }, [profileKey])
 
   useEffect(() => {
     read()
@@ -109,22 +115,22 @@ export function OwnedCompanionGrid({ sprite, eggSprite }: OwnedCompanionGridProp
   const openEgg = useCallback(
     (drawId: string) => {
       setProfile((current) => {
-        if (!current) return current
+        if (!current || !profileKey) return current
         const outcome = hatchEgg(current, drawId, new Date().toISOString())
         if (!outcome.ok) return current
-        saveGuestProfile(window.localStorage, outcome.profile)
+        saveGuestProfile(window.localStorage, outcome.profile, profileKey)
         // Tells the navbar badge and the runtime that the inventory changed.
         window.dispatchEvent(new Event('terrarium:guest-profile-updated'))
         return outcome.profile
       })
     },
-    [],
+    [profileKey],
   )
 
   const makeActive = useCallback(
     (companionId: string) => {
       setProfile((current) => {
-        if (!current) return current
+        if (!current || !profileKey) return current
         // The active companion is a field on the profile, not a separate store, so
         // this is a plain profile edit. `switchActiveCompanion` on ProductState is
         // the engine's own guard; here the profile is the only thing being changed
@@ -135,12 +141,12 @@ export function OwnedCompanionGrid({ sprite, eggSprite }: OwnedCompanionGridProp
           activeCompanionId: companionId,
           updatedAt: new Date().toISOString(),
         }
-        saveGuestProfile(window.localStorage, next)
+        saveGuestProfile(window.localStorage, next, profileKey)
         window.dispatchEvent(new Event('terrarium:guest-profile-updated'))
         return next
       })
     },
-    [],
+    [profileKey],
   )
 
   if (!ready) {

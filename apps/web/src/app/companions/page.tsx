@@ -63,6 +63,11 @@ async function loadAccountProductState(): Promise<AccountProductResult> {
   }
 }
 
+// The profile key is resolved in the client by `useViewerProfileKey`, from
+// `/api/auth/session`. This page is a Server Component but the profile lives in the
+// browser, so the key has to be resolved client-side regardless, and one resolver
+// shared by every surface is what stops them disagreeing again.
+
 export default async function CompanionsPage() {
   const accountProduct = await loadAccountProductState()
   const productState = accountProduct.state

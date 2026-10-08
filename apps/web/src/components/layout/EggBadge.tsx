@@ -18,14 +18,20 @@
 import { useEffect, useState } from 'react'
 import { loadGuestProfile } from '@/lib/game/guest-profile'
 import { eggCount } from '@/lib/game/companion-eggs'
+import { useViewerProfileKey } from '@/lib/sync/use-viewer-profile-key'
 
 export function EggBadge() {
   const [count, setCount] = useState(0)
+  const profileKey = useViewerProfileKey()
 
   useEffect(() => {
+    // Wait for the key. Reading the signed-out profile on a signed-in browser showed
+    // the wrong egg count, and the badge is the only thing telling the user an egg is
+    // waiting at all.
+    if (!profileKey) return
     const read = () => {
       try {
-        const profile = loadGuestProfile(window.localStorage)
+        const profile = loadGuestProfile(window.localStorage, profileKey)
         setCount(profile ? eggCount(profile) : 0)
       } catch {
         // Storage unavailable: no badge is the honest result.
@@ -35,7 +41,7 @@ export function EggBadge() {
     read()
     window.addEventListener('terrarium:guest-profile-updated', read)
     return () => window.removeEventListener('terrarium:guest-profile-updated', read)
-  }, [])
+  }, [profileKey])
 
   if (count === 0) return null
 

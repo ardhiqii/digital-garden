@@ -22,6 +22,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { loadGuestProfile, saveGuestProfile, type GuestProfile } from '@/lib/game/guest-profile'
+import { useViewerProfileKey } from '@/lib/sync/use-viewer-profile-key'
 import { PROTOTYPE_COMPANION_CATALOG } from '@/lib/game/companion-catalog'
 import {
   assignCompanion,
@@ -58,15 +59,20 @@ export function CompanionPicker({ repositories }: CompanionPickerProps) {
   const [ready, setReady] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [fetched, setFetched] = useState<readonly GithubRepository[]>([])
+  const profileKey = useViewerProfileKey()
 
   const read = useCallback(() => {
+    // Wait for the viewer's key. Assuming the signed-out one read a different
+    // profile on a signed-in browser, so the picker listed companions the user had
+    // on one page and not on another.
+    if (!profileKey) return
     try {
-      setProfile(loadGuestProfile(window.localStorage))
+      setProfile(loadGuestProfile(window.localStorage, profileKey))
     } catch {
       setProfile(null)
     }
     setReady(true)
-  }, [])
+  }, [profileKey])
 
   useEffect(() => {
     read()
@@ -98,10 +104,11 @@ export function CompanionPicker({ repositories }: CompanionPickerProps) {
   const repos = repositories ?? fetched
 
   const commit = useCallback((next: GuestProfile) => {
-    saveGuestProfile(window.localStorage, next)
+    if (!profileKey) return
+    saveGuestProfile(window.localStorage, next, profileKey)
     setProfile(next)
     window.dispatchEvent(new Event('terrarium:guest-profile-updated'))
-  }, [])
+  }, [profileKey])
 
   const assign = useCallback(
     (repositoryId: string, referenceId: string) => {
