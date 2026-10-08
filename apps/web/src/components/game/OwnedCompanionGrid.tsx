@@ -121,6 +121,28 @@ export function OwnedCompanionGrid({ sprite, eggSprite }: OwnedCompanionGridProp
     [],
   )
 
+  const makeActive = useCallback(
+    (companionId: string) => {
+      setProfile((current) => {
+        if (!current) return current
+        // The active companion is a field on the profile, not a separate store, so
+        // this is a plain profile edit. `switchActiveCompanion` on ProductState is
+        // the engine's own guard; here the profile is the only thing being changed
+        // and the guard is the ownership check below.
+        if (!current.collection.some((entry) => entry.companionId === companionId)) return current
+        const next: GuestProfile = {
+          ...current,
+          activeCompanionId: companionId,
+          updatedAt: new Date().toISOString(),
+        }
+        saveGuestProfile(window.localStorage, next)
+        window.dispatchEvent(new Event('terrarium:guest-profile-updated'))
+        return next
+      })
+    },
+    [],
+  )
+
   if (!ready) {
     // Deliberately not an empty state: claiming "no companions" before storage
     // has been read would be wrong for everyone who owns one.
@@ -180,6 +202,7 @@ export function OwnedCompanionGrid({ sprite, eggSprite }: OwnedCompanionGridProp
             {collection.map((entry) => {
               const definition = PROTOTYPE_COMPANION_CATALOG.get(entry.companionId)
               const assignment = dressed.find((a) => a.referenceId === entry.referenceId)
+              const isActive = entry.companionId === profile?.activeCompanionId
               return (
                 <li
                   key={entry.referenceId}
@@ -204,6 +227,30 @@ export function OwnedCompanionGrid({ sprite, eggSprite }: OwnedCompanionGridProp
                       dressing a repository
                     </p>
                   ) : null}
+                  {/*
+                    The page that LISTS the companions has to be the page that sets
+                    which one is active. The control existed but was only mounted on
+                    /write and /github, so the one screen where a user goes to think
+                    about their companions was the one screen that could not change
+                    the answer.
+                  */}
+                  {isActive ? (
+                    <p
+                      className="font-data mt-1 text-[10px] uppercase tracking-wider"
+                      style={{ color: 'var(--accent)' }}
+                    >
+                      active
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => makeActive(entry.companionId)}
+                      className="ui-row font-data mt-2 px-2 py-1 text-[10px] uppercase tracking-wider border transition-opacity hover:opacity-80"
+                      style={{ borderColor: 'var(--rule)', color: 'var(--ink)' }}
+                    >
+                      Make active
+                    </button>
+                  )}
                 </li>
               )
             })}
