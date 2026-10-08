@@ -30,3 +30,27 @@ export function profileKeyFor(githubId: number | null | undefined): string {
     ? `${GUEST_PROFILE_STORAGE_KEY}:github-${githubId}`
     : GUEST_PROFILE_STORAGE_KEY
 }
+
+/** The profile key for an already-resolved namespace, or the guest key for none. */
+export function profileKeyFromNamespace(namespace: string | undefined): string {
+  return namespace ? `${GUEST_PROFILE_STORAGE_KEY}:${namespace}` : GUEST_PROFILE_STORAGE_KEY
+}
+
+/**
+ * The namespace a profile key carries, or `undefined` for the signed-out key.
+ *
+ * The sibling product keys (ledger, encounters, revealed draws, sync schedule) are
+ * namespaced by this value, NOT by the profile key: `product-browser-storage` builds
+ * `${key}:${namespace}` itself, so passing a whole profile key through as the namespace
+ * produces `terrarium:guest-encounters:terrarium:guest-profile:github-123`. That key is
+ * read by nothing, so the state looks empty and the daily draw is handed out a second
+ * time for the same day.
+ *
+ * Lives beside `profileKeyFor` because this is the inverse of that function, and the two
+ * have to agree: `namespaceFromProfileKey(profileKeyFor(id))` is the id's namespace.
+ */
+export function namespaceFromProfileKey(profileKey: string): string | undefined {
+  return profileKey === GUEST_PROFILE_STORAGE_KEY
+    ? undefined
+    : profileKey.slice(GUEST_PROFILE_STORAGE_KEY.length + 1)
+}

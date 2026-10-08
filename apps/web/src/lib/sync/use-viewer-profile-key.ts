@@ -21,7 +21,17 @@
 
 import { useEffect, useState } from 'react'
 import { GUEST_PROFILE_STORAGE_KEY, loadGuestProfile, saveGuestProfile } from '@/lib/game/guest-profile'
+import {
+  browserProductStorage,
+  loadBrowserEncounters,
+  loadBrowserLedger,
+  loadRevealedDraws,
+  saveBrowserEncounters,
+  saveBrowserLedger,
+  saveRevealedDraws,
+} from '@/lib/game/product-browser-storage'
 import { planGuestMigration } from '@/lib/game/guest-migration'
+import { namespaceFromProfileKey } from '@/lib/sync/viewer-profile-key'
 
 export interface ViewerSession {
   signedIn: boolean
@@ -33,6 +43,84 @@ export interface ViewerSession {
 }
 
 let inFlight: Promise<ViewerSession | null> | null = null
+
+/**
+ * Carry the signed-out encounter state into the account namespace.
+ *
+ * WHY THE PROFILE ALONE WAS NOT ENOUGH: the profile holds the collection and the eggs,
+ * but NOT which days have been claimed. That lives in the encounter state, under its own
+ * key with its own namespace. Moving only the profile left the account looking at an
+ * empty encounter state, and an empty encounter state says today is unclaimed. So a user
+ * who drew their daily companion while signed out and then signed in was handed a SECOND
+ * draw for the same day, under a different key, with no indication that anything was
+ * wrong. The meter and the revealed-draw list reset with it, so the dismissed reveal
+ * cards came back and progress toward the next draw was lost.
+ *
+ * The guest copy is left in place. It is a few kilobytes, the signed-out key is the
+ * source of truth for nothing else, and leaving it means a failed profile write can still
+ * be retried on the next visit.
+ */
+function migrateEncounterStateIntoAccount(profileKey: string): void {
+  const storage = browserProductStorage()
+  // The sibling keys are namespaced by the account id, NOT by the profile key:
+  // `product-browser-storage` appends the namespace itself. Passing the whole profile key
+  // here wrote `terrarium:guest-encounters:terrarium:guest-profile:github-123`, a key no
+  // surface reads, so the state looked empty and today's draw was handed out twice.
+  const namespace = namespaceFromProfileKey(profileKey)
+  const guestEncounters = loadBrowserEncounters(storage)
+  const accountEncounters = loadBrowserEncounters(storage, namespace)
+
+  // Union the claimed days rather than overwrite: whichever side has claimed a day keeps
+  // it claimed. Taking only the guest's would forget days the account already claimed and
+  // hand back a draw it had spent; taking only the account's is the bug this fixes.
+  const claimed = new Set([
+    ...accountEncounters.processedTriggerIds,
+    ...guestEncounters.processedTriggerIds,
+  ])
+  // Draws are keyed on their stable id, and their order is preserved, so the account's
+  // own draws stay first. A draw for a day that is already claimed on either side is kept
+  // rather than dropped: it is the record of an egg the user may still be holding.
+  const byId = new Map(accountEncounters.draws.map((draw) => [draw.id, draw]))
+  for (const draw of guestEncounters.draws) {
+    if (!byId.has(draw.id)) byId.set(draw.id, draw)
+  }
+
+  saveBrowserEncounters(
+    storage,
+    {
+      // The furthest-along meter wins: resetting it would throw away progress toward the
+      // next draw, which is the more visible loss of the two.
+      meter: Math.max(accountEncounters.meter, guestEncounters.meter),
+      totalProgress: Math.max(accountEncounters.totalProgress, guestEncounters.totalProgress),
+      nextSequence: Math.max(accountEncounters.nextSequence, guestEncounters.nextSequence),
+      draws: [...byId.values()],
+      processedTriggerIds: [...claimed],
+      essenceByFamily: { ...guestEncounters.essenceByFamily, ...accountEncounters.essenceByFamily },
+    },
+    namespace,
+  )
+
+  // Revealed draws are a dismissal list, so the union is exactly right: a card dismissed
+  // on either side stays dismissed.
+  const revealed = new Set([
+    ...loadRevealedDraws(storage, namespace),
+    ...loadRevealedDraws(storage),
+  ])
+  saveRevealedDraws(storage, [...revealed], namespace)
+
+  // The ledger is the XP record. Union by event id, because `mergeProductEvents` already
+  // keys on it and a duplicate would be counted once anyway.
+  const accountLedger = loadBrowserLedger(storage, namespace)
+  const guestLedger = loadBrowserLedger(storage)
+  const seen = new Set(accountLedger.events.map((event) => event.eventId))
+  const merged = [
+    ...accountLedger.events,
+    ...guestLedger.events.filter((event) => !seen.has(event.eventId)),
+  ]
+  if (merged.length !== accountLedger.events.length) {
+    saveBrowserLedger(storage, { events: merged }, namespace)
+  }
+}
 
 /**
  * Carry a signed-out profile into the account, once, before any surface reads it.
@@ -70,9 +158,16 @@ function migrateGuestProfileIntoAccount(profileKey: string): void {
       saveGuestProfile(storage, guestProfile, profileKey)
     } else {
       const plan = planGuestMigration(guestProfile, accountProfile)
-      if (!plan) return
+      if (!plan) {
+        // Same identity: the account key already holds this profile, so the profile
+        // needs no move. The encounter state still might, if a previous visit died
+        // between the two writes.
+        migrateEncounterStateIntoAccount(profileKey)
+        return
+      }
       saveGuestProfile(storage, plan.profile, profileKey)
     }
+    migrateEncounterStateIntoAccount(profileKey)
     storage.removeItem(GUEST_PROFILE_STORAGE_KEY)
     // Tell every mounted surface to re-read, since the profile they hydrated from has
     // just been superseded.
@@ -129,7 +224,13 @@ export function useViewerProfileKey(): string | null {
   useEffect(() => {
     let cancelled = false
     void fetchSession().then((session) => {
-      if (!cancelled && session) setKey(session.profileKey)
+      if (cancelled) return
+      // A settled request with no session means nobody is signed in, or the endpoint
+      // is unreachable. Either way the signed-out key is the one to read: returning
+      // `null` here would leave a caller waiting forever on a key that never arrives,
+      // and a caller that waits forever renders a spinner instead of the profile the
+      // user already has. `null` now means strictly "not resolved yet".
+      setKey(session ? session.profileKey : GUEST_PROFILE_STORAGE_KEY)
     })
     return () => {
       cancelled = true

@@ -14,6 +14,7 @@ import {
   type CompanionDefinition,
 } from '@/lib/game/companion-catalog'
 import SignInButton from '@/components/layout/SignInButton'
+import { useViewerProfileKey } from '@/lib/sync/use-viewer-profile-key'
 
 const catalog = PROTOTYPE_COMPANION_CATALOG
 const starter = catalog.list()[0]
@@ -144,19 +145,26 @@ function markWarningShown(profile: GuestProfile, timestamp: string): GuestProfil
 
 export function GuestCompanionOnboarding() {
   const [state, setState] = useState<OnboardingState>({ kind: 'loading' })
+  const profileKey = useViewerProfileKey()
 
   useEffect(() => {
+    // This was the last component still reading the bare signed-out key. On a
+    // signed-in browser it therefore read NOTHING, called `createGuestProfile`,
+    // and wrote a brand-new starter under the signed-out key: a second profile
+    // that no other surface reads. The user saw a fresh companion and their real
+    // progress was untouched, but also unreachable from this panel.
+    if (!profileKey) return
     try {
       const storage = browserStorage()
       const timestamp = new Date().toISOString()
-      const stored = loadGuestProfile(storage)
+      const stored = loadGuestProfile(storage, profileKey)
       const profile = stored ?? createGuestProfile({
         guestId: newGuestId(),
         starterCompanionId: starter.id,
         now: timestamp,
       })
       const profileWithWarning = markWarningShown(profile, timestamp)
-      saveGuestProfile(storage, profileWithWarning)
+      saveGuestProfile(storage, profileWithWarning, profileKey)
       announceProfileUpdate()
       // Browser storage is an external system; this initializes the client
       // view after hydration and intentionally updates local React state.
@@ -168,11 +176,11 @@ export function GuestCompanionOnboarding() {
         message: 'This browser did not allow local guest storage. You can retry or continue below.',
       })
     }
-  }, [])
+  }, [profileKey])
 
   const persistSelection = useCallback(
     (acquisition: SelectionKind, companion: CompanionDefinition) => {
-      if (state.kind !== 'ready') return
+      if (state.kind !== 'ready' || !profileKey) return
       try {
         const updatedProfile = persistOnboardingSelection(
           state.profile,
@@ -180,18 +188,18 @@ export function GuestCompanionOnboarding() {
           companion.id,
           new Date().toISOString(),
         )
-        saveGuestProfile(browserStorage(), updatedProfile)
+        saveGuestProfile(browserStorage(), updatedProfile, profileKey)
         announceProfileUpdate()
         setState({ kind: 'ready', profile: updatedProfile, companion, selection: acquisition })
       } catch {
         // Keep the current UI state if the browser rejects a write.
       }
     },
-    [state],
+    [state, profileKey],
   )
 
   const dismissWarning = useCallback(() => {
-    if (state.kind !== 'ready') return
+    if (state.kind !== 'ready' || !profileKey) return
     try {
       const timestamp = new Date().toISOString()
       const profile = {
@@ -204,13 +212,13 @@ export function GuestCompanionOnboarding() {
           updatedAt: timestamp,
         },
       }
-      saveGuestProfile(browserStorage(), profile)
+      saveGuestProfile(browserStorage(), profile, profileKey)
       announceProfileUpdate()
       setState({ ...state, profile })
     } catch {
       // Keep the warning visible if the browser rejects a write.
     }
-  }, [state])
+  }, [state, profileKey])
 
   if (state.kind === 'loading') {
     return (
