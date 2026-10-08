@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react'
 import ThemeToggle from './ThemeToggle'
 import AccountMenu from './AccountMenu'
 import { EggBadge } from './EggBadge'
+import { startViewerSession } from '@/lib/sync/use-viewer-profile-key'
 import GardenMark from '../GardenMark'
 import { siteConfig } from '@/lib/site-config'
 
@@ -111,6 +112,12 @@ export default function Navbar() {
         // Signed out is the right answer when the endpoint is unreachable.
         // A nav bar must never be the thing that breaks a page.
       })
+    // Also run the guest-profile import, outside this component's render tree. The
+    // navbar is mounted on every route and at every viewport, which is what makes it
+    // the right place: routing the import through the egg badge alone meant it only
+    // ran where that badge was mounted, and on a phone the badge sits inside the
+    // hamburger menu, so signing in from a phone would never have migrated anything.
+    startViewerSession()
     return () => {
       cancelled = true
     }

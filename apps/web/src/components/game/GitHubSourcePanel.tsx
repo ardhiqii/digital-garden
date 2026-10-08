@@ -86,6 +86,7 @@ import {
 } from '@/lib/sync/sync-schedule'
 import { filterGithubRepositories, type RepositoryScope } from '@/lib/sync/github-repository-browser'
 import type { GithubRepository } from '@/lib/sync/github-repositories'
+import { ensureViewerSession } from '@/lib/sync/use-viewer-profile-key'
 import { CompanionSwitcher } from './CompanionSwitcher'
 import { SyncProgress } from './SyncProgress'
 import { EncounterReveal } from './EncounterReveal'
@@ -849,6 +850,11 @@ export function GitHubSourcePanel() {
       setSchedule(storedSchedule.interval)
       lastAttemptAtRef.current = storedSchedule.lastAttemptAt
       syncUsageRef.current = loadSyncRequestUsage(browserProductStorage(), namespace)
+      // The guest import must have completed before anything is allowed to create a
+      // profile here. `ensureBrowserGuestProfile` INVENTS a fresh starter when the
+      // account key is empty, so racing the import would orphan the user's real
+      // companions under the signed-out key and show them a blank one.
+      await ensureViewerSession()
       const localState = browserState(namespace)
       const hydrated = await restoreCloudProductState(localState, namespace)
       setProductState(hydrated.state)

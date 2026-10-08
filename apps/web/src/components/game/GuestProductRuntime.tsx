@@ -37,12 +37,16 @@ import {
   summarizeScanFiles,
 } from '@/lib/game/scan-summary-store'
 import { canonicalizeProductEvent } from '@/lib/sync/product-event-id'
+import { useViewerProfileKey } from '@/lib/sync/use-viewer-profile-key'
+import {
+  loadBrowserEncounters,
+  loadBrowserLedger,
+  saveBrowserEncounters,
+  saveBrowserLedger,
+} from '@/lib/game/product-browser-storage'
+import { GUEST_PROFILE_STORAGE_KEY } from '@/lib/game/guest-profile'
 
-const LEDGER_KEY = 'terrarium:guest-event-ledger'
-const ENCOUNTER_KEY = 'terrarium:guest-encounters'
 const REVEALED_DRAWS_KEY = 'terrarium:guest-revealed-draws'
-const LEGACY_LEDGER_KEY = 'digital-garden:guest-event-ledger'
-const LEGACY_ENCOUNTER_KEY = 'digital-garden:guest-encounters'
 const PROFILE_EVENT = 'terrarium:guest-profile-updated'
 const LEGACY_PROFILE_EVENT = 'digital-garden:guest-profile-updated'
 const LEGACY_SCAN_EVENT = 'digital-garden:markdown-scan'
@@ -57,54 +61,42 @@ function storage(): BrowserStorage {
   return window.localStorage
 }
 
-function loadLedger(): EventLedger {
+/**
+ * The namespace for this viewer's product keys, or undefined when signed out.
+ *
+ * This component used to keep its own `loadLedger`/`saveLedger`/`loadEncounters`/
+ * `saveEncounters` helpers with hard-coded bare keys, duplicating
+ * `product-browser-storage` and ignoring the namespace every other surface uses. On a
+ * signed-in browser `/write` therefore wrote XP to a profile that `/github` never
+ * read, so work done here was invisible in the synced condition and never reached the
+ * cloud backup.
+ */
+function namespaceFromProfileKey(profileKey: string): string | undefined {
+  return profileKey === GUEST_PROFILE_STORAGE_KEY
+    ? undefined
+    : profileKey.slice(GUEST_PROFILE_STORAGE_KEY.length + 1)
+}
+
+function loadLedger(namespace?: string): EventLedger {
+  return loadBrowserLedger(storage(), namespace)
+}
+
+function saveLedger(ledger: EventLedger, namespace?: string): void {
+  saveBrowserLedger(storage(), ledger, namespace)
+}
+
+function loadEncounters(namespace?: string): EncounterState {
+  return loadBrowserEncounters(storage(), namespace)
+}
+
+function saveEncounters(encounters: EncounterState, namespace?: string): void {
+  saveBrowserEncounters(storage(), encounters, namespace)
+}
+
+function loadRevealedDraws(profileKey: string): string[] {
   try {
-    const serialized = storage().getItem(LEDGER_KEY) ?? storage().getItem(LEGACY_LEDGER_KEY)
-    const parsed: unknown = JSON.parse(serialized ?? '{"events":[]}')
-    if (!parsed || typeof parsed !== 'object' || !('events' in parsed) || !Array.isArray(parsed.events)) {
-      return { events: [] }
-    }
-    return addEvents(
-      { events: [] },
-      (parsed.events as NormalizedEvent[]).map(canonicalizeProductEvent),
-    )
-  } catch {
-    return { events: [] }
-  }
-}
-
-function saveLedger(ledger: EventLedger): void {
-  storage().setItem(LEDGER_KEY, JSON.stringify(ledger))
-}
-
-function loadEncounters(): EncounterState {
-  try {
-    const serialized = storage().getItem(ENCOUNTER_KEY) ?? storage().getItem(LEGACY_ENCOUNTER_KEY)
-    const parsed: unknown = JSON.parse(serialized ?? 'null')
-    if (!parsed || typeof parsed !== 'object') return createEncounterState()
-    const value = parsed as Partial<EncounterState>
-    if (
-      typeof value.meter !== 'number' ||
-      typeof value.totalProgress !== 'number' ||
-      typeof value.nextSequence !== 'number' ||
-      !Array.isArray(value.draws) ||
-      !Array.isArray(value.processedTriggerIds) ||
-      !value.essenceByFamily ||
-      typeof value.essenceByFamily !== 'object'
-    ) return createEncounterState()
-    return value as EncounterState
-  } catch {
-    return createEncounterState()
-  }
-}
-
-function saveEncounters(encounters: EncounterState): void {
-  storage().setItem(ENCOUNTER_KEY, JSON.stringify(encounters))
-}
-
-function loadRevealedDraws(): string[] {
-  try {
-    const parsed: unknown = JSON.parse(storage().getItem(REVEALED_DRAWS_KEY) ?? '[]')
+    const key = `${REVEALED_DRAWS_KEY}:${namespaceFromProfileKey(profileKey) ?? ''}`
+    const parsed: unknown = JSON.parse(storage().getItem(key) ?? '[]')
     if (!Array.isArray(parsed)) return []
     return parsed.filter((value): value is string => typeof value === 'string')
   } catch {
@@ -112,13 +104,15 @@ function loadRevealedDraws(): string[] {
   }
 }
 
-function saveRevealedDraws(ids: readonly string[]): void {
-  storage().setItem(REVEALED_DRAWS_KEY, JSON.stringify(ids))
+function saveRevealedDraws(ids: readonly string[], profileKey: string): void {
+  const ns = namespaceFromProfileKey(profileKey)
+  const key = ns ? `${REVEALED_DRAWS_KEY}:${ns}` : REVEALED_DRAWS_KEY
+  storage().setItem(key, JSON.stringify(ids))
 }
 
-function currentProfile(): GuestProfile | null {
+function currentProfile(profileKey: string): GuestProfile | null {
   try {
-    return loadGuestProfile(storage())
+    return loadGuestProfile(storage(), profileKey)
   } catch {
     return null
   }
@@ -157,15 +151,24 @@ function recordBaseline(profile: GuestProfile, sourceId: string, files: readonly
 
 export function GuestProductRuntime() {
   const [state, setState] = useState<ProductState | null>(null)
-  const [revealedDraws, setRevealedDraws] = useState<string[]>(() => loadRevealedDraws())
+  const profileKey = useViewerProfileKey()
+  const [revealedDraws, setRevealedDraws] = useState<string[]>([])
 
   useEffect(() => {
-    const profile = currentProfile()
+    // Wait for the viewer's key. Everything below reads and writes the store this
+    // key names, so running before it is known would read one profile and write
+    // another. The namespace keeps this page on the same data as /github.
+    if (!profileKey) return
+    const namespace = namespaceFromProfileKey(profileKey)
+
+    setRevealedDraws(loadRevealedDraws(profileKey))
+
+    const profile = currentProfile(profileKey)
     if (!profile) return
 
     // Hydrate from browser-local state after the client mounts.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setState(createProductState(profile, loadLedger(), loadEncounters(), PROTOTYPE_COMPANION_CATALOG))
+    setState(createProductState(profile, loadLedger(namespace), loadEncounters(namespace), PROTOTYPE_COMPANION_CATALOG))
 
     // THE DAILY DRAW. Claimed on arrival, once per local calendar day, gated by
       // the day id being in `processedTriggerIds`. Deliberately here rather than
@@ -174,7 +177,7 @@ export function GuestProductRuntime() {
       // showing up. Hooking it to a scan would make the reward conditional on
       // writing, which is the opposite of what a daily login reward is for.
       {
-        const encounters = loadEncounters()
+        const encounters = loadEncounters(namespace)
         if (isDailyDrawDue(encounters, new Date())) {
           const claimed = claimDailyDraw(
             encounters,
@@ -183,28 +186,28 @@ export function GuestProductRuntime() {
             profile.collection.map((entry) => entry.companionId),
           )
           if (claimed.claimed) {
-            saveEncounters(claimed.state)
+            saveEncounters(claimed.state, namespace)
             // The draw becomes an EGG, not a collection entry. A draw used to land
             // straight in the collection and announce itself in a panel the user
             // read; an egg is the same event with the user present for it. The
             // companion joins the collection when the egg is opened, so an
             // unhatched companion does not count toward the assignment bound.
             const withEggs = layEggs(profile, claimed.newDraws, new Date().toISOString())
-            saveGuestProfile(storage(), withEggs)
+            saveGuestProfile(storage(), withEggs, profileKey)
             window.dispatchEvent(new Event(PROFILE_EVENT))
-            setState(createProductState(withEggs, loadLedger(), claimed.state, PROTOTYPE_COMPANION_CATALOG))
+            setState(createProductState(withEggs, loadLedger(namespace), claimed.state, PROTOTYPE_COMPANION_CATALOG))
           }
         }
       }
 
     const onProfileUpdated = () => {
-      const nextProfile = currentProfile()
+      const nextProfile = currentProfile(profileKey)
       if (!nextProfile) return
       setState((current) =>
         createProductState(
           nextProfile,
-          current?.ledger ?? loadLedger(),
-          current?.encounters ?? loadEncounters(),
+          current?.ledger ?? loadLedger(namespace),
+          current?.encounters ?? loadEncounters(namespace),
           PROTOTYPE_COMPANION_CATALOG,
         ),
       )
@@ -213,7 +216,7 @@ export function GuestProductRuntime() {
     const onScan = (event: Event) => {
       const detail = (event as CustomEvent<MarkdownScanDetail>).detail
       if (!detail || !detail.sourceId || !Array.isArray(detail.files)) return
-      const profile = currentProfile()
+      const profile = currentProfile(profileKey)
       if (!profile) return
 
       // The scan's memory comes from storage, not from a ref. It used to live in
@@ -236,7 +239,7 @@ export function GuestProductRuntime() {
           saveGuestProfile(storage(), baselineProfile)
           window.dispatchEvent(new Event(PROFILE_EVENT))
         }
-        setState((current) => current ?? createProductState(baselineProfile, loadLedger(), loadEncounters(), PROTOTYPE_COMPANION_CATALOG))
+        setState((current) => current ?? createProductState(baselineProfile, loadLedger(namespace), loadEncounters(namespace), PROTOTYPE_COMPANION_CATALOG))
         return
       }
 
@@ -258,18 +261,18 @@ export function GuestProductRuntime() {
         files: summarizeScanFiles(detail.files),
       })
       if (normalized.length === 0) {
-        setState((current) => current ?? createProductState(profile, loadLedger(), loadEncounters(), PROTOTYPE_COMPANION_CATALOG))
+        setState((current) => current ?? createProductState(profile, loadLedger(namespace), loadEncounters(namespace), PROTOTYPE_COMPANION_CATALOG))
         return
       }
 
       setState((current) => {
-        const base = current ?? createProductState(profile, loadLedger(), loadEncounters(), PROTOTYPE_COMPANION_CATALOG)
+        const base = current ?? createProductState(profile, loadLedger(namespace), loadEncounters(namespace), PROTOTYPE_COMPANION_CATALOG)
         const next = applyProductEvents(base, normalized, PROTOTYPE_COMPANION_CATALOG, {
           encounterSignals: signalsFromFiles(detail.files),
           triggerId: `scan:${detail.sourceId}:${normalized.map((item) => item.eventId).join('|')}`,
         })
-        saveLedger(next.ledger)
-        saveEncounters(next.encounters)
+        saveLedger(next.ledger, namespace)
+        saveEncounters(next.encounters, namespace)
         return next
       })
     }
@@ -283,22 +286,22 @@ export function GuestProductRuntime() {
       window.removeEventListener(MARKDOWN_SCAN_EVENT, onScan)
       window.removeEventListener(LEGACY_PROFILE_EVENT, onProfileUpdated)
       window.removeEventListener(LEGACY_SCAN_EVENT, onScan)
-    }
-  }, [])
+      }
+      }, [profileKey])
 
   const dismissDraw = (drawId: string) => {
     setRevealedDraws((current) => {
       const next = current.includes(drawId) ? current : [...current, drawId]
-      saveRevealedDraws(next)
+      if (profileKey) saveRevealedDraws(next, profileKey)
       return next
     })
   }
 
   const makeActive = (companionId: string) => {
-    if (!state) return
+    if (!state || !profileKey) return
     const next = switchActiveCompanion(state, companionId, PROTOTYPE_COMPANION_CATALOG)
     if (next !== state && next.profile.activeCompanionId !== state.profile.activeCompanionId) {
-      saveGuestProfile(storage(), next.profile)
+      saveGuestProfile(storage(), next.profile, profileKey)
       window.dispatchEvent(new Event(PROFILE_EVENT))
       setState(next)
     }

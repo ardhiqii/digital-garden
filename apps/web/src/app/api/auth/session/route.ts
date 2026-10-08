@@ -19,6 +19,7 @@
  */
 
 import { getSessionProvider, isOAuthConfigured } from '@/lib/sync/session'
+import { profileKeyFor } from '@/lib/sync/viewer-profile-key'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -31,11 +32,23 @@ export async function GET(): Promise<Response> {
   // only ever answer 503.
   const configured = isOAuthConfigured()
 
-  // Only what the nav actually renders. The numeric GitHub id is part of
-  // `Session` but nothing client-side needs it, so it does not leave here.
+  // `profileKey` is the finished storage key for this viewer, so every surface that
+  // reads a profile resolves it the same way. Returning the assembled key rather
+  // than the numeric GitHub id keeps the format on the server: five components used
+  // to build it themselves, four of them wrongly, which is how two pages ended up
+  // showing two different active companions.
+  //
+  // The key contains the viewer's own id and is returned only to the viewer, so it
+  // discloses nothing that is not already visible in their own GitHub URLs.
   const body = session
-    ? { signedIn: true, handle: session.handle, avatarUrl: session.avatarUrl, configured }
-    : { signedIn: false, handle: null, avatarUrl: null, configured }
+    ? {
+        signedIn: true,
+        handle: session.handle,
+        avatarUrl: session.avatarUrl,
+        profileKey: profileKeyFor(session.githubId),
+        configured,
+      }
+    : { signedIn: false, handle: null, avatarUrl: null, profileKey: profileKeyFor(null), configured }
 
   return new Response(JSON.stringify(body), {
     status: 200,
