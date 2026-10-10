@@ -2,6 +2,12 @@
 
 import { displayCompanionName } from './display-name'
 import { PROTOTYPE_COMPANION_CATALOG } from '@/lib/game/companion-catalog'
+import { eggDrawIds } from '@/lib/game/companion-eggs'
+import {
+  revealKindFor,
+  revealLabel,
+  revealOffersMakeActive,
+} from '@/lib/game/encounter-reveal'
 import type { ProductState } from '@/lib/game/product-state'
 
 export interface EncounterRevealProps {
@@ -32,6 +38,10 @@ export function EncounterReveal({
 
   if (pending.length === 0) return null
 
+  // A draw that is still an egg is not in the collection, so the card must not
+  // claim it was added and must not offer an action the switcher will refuse.
+  const eggIds = eggDrawIds(state.profile)
+
   return (
     <section
       className="mb-4 p-5"
@@ -44,18 +54,17 @@ export function EncounterReveal({
       <div className="flex flex-col gap-3">
         {pending.map((draw) => {
           const definition = PROTOTYPE_COMPANION_CATALOG.get(draw.selectedCompanionId)
+          const kind = revealKindFor(draw, eggIds)
           return (
             <div key={draw.id} className="flex flex-col gap-2">
               <p className="font-ui text-lg font-semibold">
                 {definition?.name ?? displayCompanionName(draw.selectedCompanionId)}
               </p>
               <p className="font-data text-xs" style={{ color: 'var(--ink-muted)' }}>
-                {draw.isDuplicate
-                  ? `Duplicate · +${draw.essenceAwarded} Essence for this family`
-                  : 'New companion added to your collection'}
+                {revealLabel(kind, draw)}
               </p>
               <div className="flex flex-wrap gap-2">
-                {!draw.isDuplicate && (
+                {revealOffersMakeActive(kind) && (
                   <button
                     type="button"
                     onClick={() => onMakeActive(draw.selectedCompanionId)}
@@ -64,6 +73,15 @@ export function EncounterReveal({
                   >
                     Make active
                   </button>
+                )}
+                {kind === 'egg' && (
+                  <a
+                    href="/companions"
+                    className="ui-row font-ui text-xs px-3 py-2 border transition-opacity hover:opacity-80"
+                    style={{ borderColor: 'var(--ink)', color: 'var(--ink)' }}
+                  >
+                    Open it
+                  </a>
                 )}
                 <button
                   type="button"
