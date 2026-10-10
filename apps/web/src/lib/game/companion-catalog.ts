@@ -334,7 +334,367 @@ export const PROTOTYPE_COMPANION_CATALOG = createCompanionCatalog([
         name: 'Ditto',
         kind: 'base',
         provider: { providerId: 'pokeapi', entityId: 'ditto', formId: '132' },
+        // Ditto was the only entry without an animated asset, which rendered it as the one
+        // still sprite in a catalog of GIFs. PokeAPI serves 132.gif (verified 200), so the
+        // omission was an oversight rather than a constraint, and the reviewer flagged
+        // inconsistent animation as a defect.
+        animatedAsset: { key: 'pokeapi:pokemon:ditto:132', variant: 'animated' },
         staticAsset: { key: 'pokeapi:pokemon:ditto:132', variant: 'static' },
+      },
+    ],
+    progression: [
+      { id: 'base', name: 'Beginning', threshold: 0, formId: 'base', kind: 'base' },
+    ],
+  },
+
+  /*
+    The catalog started as two entries, which made the daily draw a two-day feature: once
+    both were owned, every draw resolved to a duplicate, duplicates pay only Essence, and
+    Essence is not visible or spendable anywhere in the UI. Measured before this change: a
+    viewer owning just the starter got a companion on 32.5% of days and nothing on the
+    rest; owning both ended the reward permanently.
+
+    The selection rule now prefers entries the viewer does not own (see
+    `selectableWeights` in encounters.ts), so the runway is bounded by THIS list. Twelve
+    entries is twelve productive days, measured.
+
+    Every `entityId` and numeric `formId` below was resolved against PokeAPI rather than
+    written from memory, and each animated sprite URL was confirmed to return 200. All ids
+    are <= 649, so the generation-v animated GIF exists and no entry falls back to a still
+    image. `metadata.evolutionChainId` is deliberately omitted: it is an optional fallback
+    for live lookups, and inventing chain numbers would be worse than leaving it out.
+  */
+  {
+    id: 'bulbasaur-line',
+    familyId: 'bulbasaur-line',
+    name: 'Bulbasaur line',
+    rarity: 'common',
+    encounterTags: ['docs', 'growth', 'foundation'],
+    preferredLanguages: ['markdown'],
+    preferredFileTypes: ['md', 'mdx', 'txt'],
+    forms: [
+      {
+        id: 'base',
+        name: 'Bulbasaur',
+        kind: 'base',
+        provider: { providerId: 'pokeapi', entityId: 'bulbasaur', formId: '1' },
+        animatedAsset: { key: 'pokeapi:pokemon:bulbasaur:1', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:bulbasaur:1', variant: 'static' },
+      },
+      {
+        id: 'evolved',
+        name: 'Ivysaur',
+        kind: 'evolution',
+        provider: { providerId: 'pokeapi', entityId: 'ivysaur', formId: '2' },
+        animatedAsset: { key: 'pokeapi:pokemon:ivysaur:2', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:ivysaur:2', variant: 'static' },
+      },
+      {
+        id: 'final',
+        name: 'Venusaur',
+        kind: 'evolution',
+        provider: { providerId: 'pokeapi', entityId: 'venusaur', formId: '3' },
+        animatedAsset: { key: 'pokeapi:pokemon:venusaur:3', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:venusaur:3', variant: 'static' },
+      },
+    ],
+    progression: [
+      { id: 'base', name: 'Beginning', threshold: 0, formId: 'base', kind: 'base' },
+      { id: 'evolved', name: 'Blooming', threshold: 120, formId: 'evolved', kind: 'evolution' },
+      { id: 'final', name: 'Overgrown', threshold: 600, formId: 'final', kind: 'evolution' },
+    ],
+  },
+  {
+    id: 'charmander-line',
+    familyId: 'charmander-line',
+    name: 'Charmander line',
+    rarity: 'common',
+    encounterTags: ['hotfix', 'shipping', 'performance'],
+    preferredLanguages: ['javascript', 'typescript'],
+    preferredFileTypes: ['js', 'jsx', 'ts', 'tsx'],
+    forms: [
+      {
+        id: 'base',
+        name: 'Charmander',
+        kind: 'base',
+        provider: { providerId: 'pokeapi', entityId: 'charmander', formId: '4' },
+        animatedAsset: { key: 'pokeapi:pokemon:charmander:4', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:charmander:4', variant: 'static' },
+      },
+      {
+        id: 'evolved',
+        name: 'Charmeleon',
+        kind: 'evolution',
+        provider: { providerId: 'pokeapi', entityId: 'charmeleon', formId: '5' },
+        animatedAsset: { key: 'pokeapi:pokemon:charmeleon:5', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:charmeleon:5', variant: 'static' },
+      },
+      {
+        id: 'final',
+        name: 'Charizard',
+        kind: 'evolution',
+        provider: { providerId: 'pokeapi', entityId: 'charizard', formId: '6' },
+        animatedAsset: { key: 'pokeapi:pokemon:charizard:6', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:charizard:6', variant: 'static' },
+      },
+    ],
+    progression: [
+      { id: 'base', name: 'Beginning', threshold: 0, formId: 'base', kind: 'base' },
+      { id: 'evolved', name: 'Kindled', threshold: 120, formId: 'evolved', kind: 'evolution' },
+      { id: 'final', name: 'Blazing', threshold: 600, formId: 'final', kind: 'evolution' },
+    ],
+  },
+  {
+    id: 'squirtle-line',
+    familyId: 'squirtle-line',
+    name: 'Squirtle line',
+    rarity: 'common',
+    encounterTags: ['refactor', 'cleanup', 'stability'],
+    preferredLanguages: ['python', 'go'],
+    preferredFileTypes: ['py', 'go'],
+    forms: [
+      {
+        id: 'base',
+        name: 'Squirtle',
+        kind: 'base',
+        provider: { providerId: 'pokeapi', entityId: 'squirtle', formId: '7' },
+        animatedAsset: { key: 'pokeapi:pokemon:squirtle:7', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:squirtle:7', variant: 'static' },
+      },
+      {
+        id: 'evolved',
+        name: 'Wartortle',
+        kind: 'evolution',
+        provider: { providerId: 'pokeapi', entityId: 'wartortle', formId: '8' },
+        animatedAsset: { key: 'pokeapi:pokemon:wartortle:8', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:wartortle:8', variant: 'static' },
+      },
+      {
+        id: 'final',
+        name: 'Blastoise',
+        kind: 'evolution',
+        provider: { providerId: 'pokeapi', entityId: 'blastoise', formId: '9' },
+        animatedAsset: { key: 'pokeapi:pokemon:blastoise:9', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:blastoise:9', variant: 'static' },
+      },
+    ],
+    progression: [
+      { id: 'base', name: 'Beginning', threshold: 0, formId: 'base', kind: 'base' },
+      { id: 'evolved', name: 'Sheltered', threshold: 120, formId: 'evolved', kind: 'evolution' },
+      { id: 'final', name: 'Tidal', threshold: 600, formId: 'final', kind: 'evolution' },
+    ],
+  },
+  {
+    id: 'magikarp-line',
+    familyId: 'magikarp-line',
+    name: 'Magikarp line',
+    rarity: 'uncommon',
+    encounterTags: ['persistence', 'comeback', 'testing'],
+    preferredLanguages: ['ruby', 'php'],
+    preferredFileTypes: ['rb', 'php'],
+    forms: [
+      {
+        id: 'base',
+        name: 'Magikarp',
+        kind: 'base',
+        provider: { providerId: 'pokeapi', entityId: 'magikarp', formId: '129' },
+        animatedAsset: { key: 'pokeapi:pokemon:magikarp:129', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:magikarp:129', variant: 'static' },
+      },
+      {
+        id: 'evolved',
+        name: 'Gyarados',
+        kind: 'evolution',
+        provider: { providerId: 'pokeapi', entityId: 'gyarados', formId: '130' },
+        animatedAsset: { key: 'pokeapi:pokemon:gyarados:130', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:gyarados:130', variant: 'static' },
+      },
+    ],
+    progression: [
+      { id: 'base', name: 'Beginning', threshold: 0, formId: 'base', kind: 'base' },
+      { id: 'evolved', name: 'Leaping', threshold: 200, formId: 'evolved', kind: 'evolution' },
+    ],
+  },
+  {
+    id: 'abra-line',
+    familyId: 'abra-line',
+    name: 'Abra line',
+    rarity: 'rare',
+    encounterTags: ['algorithms', 'async', 'reasoning'],
+    preferredLanguages: ['rust', 'haskell'],
+    preferredFileTypes: ['rs', 'hs'],
+    forms: [
+      {
+        id: 'base',
+        name: 'Abra',
+        kind: 'base',
+        provider: { providerId: 'pokeapi', entityId: 'abra', formId: '63' },
+        animatedAsset: { key: 'pokeapi:pokemon:abra:63', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:abra:63', variant: 'static' },
+      },
+      {
+        id: 'evolved',
+        name: 'Kadabra',
+        kind: 'evolution',
+        provider: { providerId: 'pokeapi', entityId: 'kadabra', formId: '64' },
+        animatedAsset: { key: 'pokeapi:pokemon:kadabra:64', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:kadabra:64', variant: 'static' },
+      },
+      {
+        id: 'final',
+        name: 'Alakazam',
+        kind: 'evolution',
+        provider: { providerId: 'pokeapi', entityId: 'alakazam', formId: '65' },
+        animatedAsset: { key: 'pokeapi:pokemon:alakazam:65', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:alakazam:65', variant: 'static' },
+      },
+    ],
+    progression: [
+      { id: 'base', name: 'Beginning', threshold: 0, formId: 'base', kind: 'base' },
+      { id: 'evolved', name: 'Focused', threshold: 150, formId: 'evolved', kind: 'evolution' },
+      { id: 'final', name: 'Unbound', threshold: 700, formId: 'final', kind: 'evolution' },
+    ],
+  },
+  {
+    id: 'gastly-line',
+    familyId: 'gastly-line',
+    name: 'Gastly line',
+    rarity: 'rare',
+    encounterTags: ['legacy', 'archaeology', 'dead-code'],
+    preferredLanguages: ['c', 'cpp'],
+    preferredFileTypes: ['c', 'h', 'cpp'],
+    forms: [
+      {
+        id: 'base',
+        name: 'Gastly',
+        kind: 'base',
+        provider: { providerId: 'pokeapi', entityId: 'gastly', formId: '92' },
+        animatedAsset: { key: 'pokeapi:pokemon:gastly:92', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:gastly:92', variant: 'static' },
+      },
+      {
+        id: 'evolved',
+        name: 'Haunter',
+        kind: 'evolution',
+        provider: { providerId: 'pokeapi', entityId: 'haunter', formId: '93' },
+        animatedAsset: { key: 'pokeapi:pokemon:haunter:93', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:haunter:93', variant: 'static' },
+      },
+      {
+        id: 'final',
+        name: 'Gengar',
+        kind: 'evolution',
+        provider: { providerId: 'pokeapi', entityId: 'gengar', formId: '94' },
+        animatedAsset: { key: 'pokeapi:pokemon:gengar:94', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:gengar:94', variant: 'static' },
+      },
+    ],
+    progression: [
+      { id: 'base', name: 'Beginning', threshold: 0, formId: 'base', kind: 'base' },
+      { id: 'evolved', name: 'Lingering', threshold: 150, formId: 'evolved', kind: 'evolution' },
+      { id: 'final', name: 'Hollowed', threshold: 700, formId: 'final', kind: 'evolution' },
+    ],
+  },
+  {
+    id: 'snorlax',
+    familyId: 'snorlax',
+    name: 'Snorlax',
+    rarity: 'rare',
+    encounterTags: ['deep-work', 'maintenance', 'patience'],
+    preferredLanguages: ['sql'],
+    preferredFileTypes: ['sql', 'yml', 'yaml'],
+    forms: [
+      {
+        id: 'base',
+        name: 'Snorlax',
+        kind: 'base',
+        provider: { providerId: 'pokeapi', entityId: 'snorlax', formId: '143' },
+        animatedAsset: { key: 'pokeapi:pokemon:snorlax:143', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:snorlax:143', variant: 'static' },
+      },
+    ],
+    progression: [
+      { id: 'base', name: 'Beginning', threshold: 0, formId: 'base', kind: 'base' },
+    ],
+  },
+  {
+    id: 'lapras',
+    familyId: 'lapras',
+    name: 'Lapras',
+    rarity: 'rare',
+    encounterTags: ['infrastructure', 'deployment', 'migration'],
+    preferredLanguages: ['shell', 'dockerfile'],
+    preferredFileTypes: ['sh', 'dockerfile', 'tf'],
+    forms: [
+      {
+        id: 'base',
+        name: 'Lapras',
+        kind: 'base',
+        provider: { providerId: 'pokeapi', entityId: 'lapras', formId: '131' },
+        animatedAsset: { key: 'pokeapi:pokemon:lapras:131', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:lapras:131', variant: 'static' },
+      },
+    ],
+    progression: [
+      { id: 'base', name: 'Beginning', threshold: 0, formId: 'base', kind: 'base' },
+    ],
+  },
+  {
+    id: 'dratini-line',
+    familyId: 'dratini-line',
+    name: 'Dratini line',
+    rarity: 'epic',
+    encounterTags: ['scale', 'architecture', 'ambition'],
+    preferredLanguages: ['java', 'kotlin'],
+    preferredFileTypes: ['java', 'kt', 'scala'],
+    forms: [
+      {
+        id: 'base',
+        name: 'Dratini',
+        kind: 'base',
+        provider: { providerId: 'pokeapi', entityId: 'dratini', formId: '147' },
+        animatedAsset: { key: 'pokeapi:pokemon:dratini:147', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:dratini:147', variant: 'static' },
+      },
+      {
+        id: 'evolved',
+        name: 'Dragonair',
+        kind: 'evolution',
+        provider: { providerId: 'pokeapi', entityId: 'dragonair', formId: '148' },
+        animatedAsset: { key: 'pokeapi:pokemon:dragonair:148', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:dragonair:148', variant: 'static' },
+      },
+      {
+        id: 'final',
+        name: 'Dragonite',
+        kind: 'evolution',
+        provider: { providerId: 'pokeapi', entityId: 'dragonite', formId: '149' },
+        animatedAsset: { key: 'pokeapi:pokemon:dragonite:149', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:dragonite:149', variant: 'static' },
+      },
+    ],
+    progression: [
+      { id: 'base', name: 'Beginning', threshold: 0, formId: 'base', kind: 'base' },
+      { id: 'evolved', name: 'Ascending', threshold: 250, formId: 'evolved', kind: 'evolution' },
+      { id: 'final', name: 'Skyborne', threshold: 900, formId: 'final', kind: 'evolution' },
+    ],
+  },
+  {
+    id: 'mewtwo',
+    familyId: 'mewtwo',
+    name: 'Mewtwo',
+    rarity: 'legendary',
+    encounterTags: ['breakthrough', 'mastery', 'rare'],
+    preferredLanguages: ['cuda', 'zig'],
+    preferredFileTypes: ['cu', 'zig', 'asm'],
+    forms: [
+      {
+        id: 'base',
+        name: 'Mewtwo',
+        kind: 'base',
+        provider: { providerId: 'pokeapi', entityId: 'mewtwo', formId: '150' },
+        animatedAsset: { key: 'pokeapi:pokemon:mewtwo:150', variant: 'animated' },
+        staticAsset: { key: 'pokeapi:pokemon:mewtwo:150', variant: 'static' },
       },
     ],
     progression: [

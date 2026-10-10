@@ -14,7 +14,6 @@ import { CreatureSprite } from '@/components/game/CreatureSprite'
 import { StageLine } from '@/components/game/StageLine'
 import { ItemDrawer } from '@/components/game/ItemDrawer'
 import { OwnedCompanionGrid } from '@/components/game/OwnedCompanionGrid'
-import { EggShell } from '@/components/game/EggShell'
 import { ProductActivityPanel } from '@/components/game/ProductActivityPanel'
 
 export const metadata: Metadata = {
@@ -262,10 +261,7 @@ export default async function CompanionsPage() {
           repositories, and each one is spent on exactly one. The repository
           archive lives in <Link href="/repos" className="underline decoration-dotted underline-offset-2" style={{ color: 'var(--accent)' }}>Repos</Link>.
         </p>
-        <OwnedCompanionGrid
-          sprite={await CreatureSprite({ stage: 'sporeling', scale: 2 })}
-          eggSprite={<EggShell shell="var(--accent)" size={96} />}
-        />
+        <OwnedCompanionGrid sprite={await CreatureSprite({ stage: 'sporeling', scale: 2 })} />
       </section>
     </div>
   )
