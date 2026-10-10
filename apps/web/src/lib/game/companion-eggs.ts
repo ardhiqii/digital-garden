@@ -48,6 +48,17 @@ export function eggCount(profile: GuestProfile): number {
 }
 
 /**
+ * The draw ids currently sitting as eggs.
+ *
+ * Exposed as a set so the reveal card can ask "is this draw still an egg?" without
+ * importing the whole inventory shape. A draw in this set is NOT in the collection:
+ * it becomes a collection entry only when its egg is opened.
+ */
+export function eggDrawIds(profile: GuestProfile): ReadonlySet<string> {
+  return new Set(pendingEggs(profile).map((egg) => egg.drawId))
+}
+
+/**
  * Turn new draws into eggs.
  *
  * Duplicates are skipped: they were already banked as Essence by

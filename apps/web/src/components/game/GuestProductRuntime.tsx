@@ -38,15 +38,17 @@ import {
 } from '@/lib/game/scan-summary-store'
 import { canonicalizeProductEvent } from '@/lib/sync/product-event-id'
 import { useViewerProfileKey } from '@/lib/sync/use-viewer-profile-key'
+import { namespaceFromProfileKey } from '@/lib/sync/viewer-profile-key'
 import {
   loadBrowserEncounters,
   loadBrowserLedger,
+  loadRevealedDraws,
   saveBrowserEncounters,
   saveBrowserLedger,
+  saveRevealedDraws,
 } from '@/lib/game/product-browser-storage'
 import { GUEST_PROFILE_STORAGE_KEY } from '@/lib/game/guest-profile'
 
-const REVEALED_DRAWS_KEY = 'terrarium:guest-revealed-draws'
 const PROFILE_EVENT = 'terrarium:guest-profile-updated'
 const LEGACY_PROFILE_EVENT = 'digital-garden:guest-profile-updated'
 const LEGACY_SCAN_EVENT = 'digital-garden:markdown-scan'
@@ -70,12 +72,11 @@ function storage(): BrowserStorage {
  * signed-in browser `/write` therefore wrote XP to a profile that `/github` never
  * read, so work done here was invisible in the synced condition and never reached the
  * cloud backup.
+ *
+ * The derivation itself now lives in `viewer-profile-key`, beside `profileKeyFor`, so
+ * the migration in `use-viewer-profile-key` and this component cannot disagree about
+ * what a key's namespace is.
  */
-function namespaceFromProfileKey(profileKey: string): string | undefined {
-  return profileKey === GUEST_PROFILE_STORAGE_KEY
-    ? undefined
-    : profileKey.slice(GUEST_PROFILE_STORAGE_KEY.length + 1)
-}
 
 function loadLedger(namespace?: string): EventLedger {
   return loadBrowserLedger(storage(), namespace)
@@ -93,21 +94,12 @@ function saveEncounters(encounters: EncounterState, namespace?: string): void {
   saveBrowserEncounters(storage(), encounters, namespace)
 }
 
-function loadRevealedDraws(profileKey: string): string[] {
-  try {
-    const key = `${REVEALED_DRAWS_KEY}:${namespaceFromProfileKey(profileKey) ?? ''}`
-    const parsed: unknown = JSON.parse(storage().getItem(key) ?? '[]')
-    if (!Array.isArray(parsed)) return []
-    return parsed.filter((value): value is string => typeof value === 'string')
-  } catch {
-    return []
-  }
+function loadRevealedDrawsLocal(profileKey: string): string[] {
+  return loadRevealedDraws(storage(), namespaceFromProfileKey(profileKey))
 }
 
-function saveRevealedDraws(ids: readonly string[], profileKey: string): void {
-  const ns = namespaceFromProfileKey(profileKey)
-  const key = ns ? `${REVEALED_DRAWS_KEY}:${ns}` : REVEALED_DRAWS_KEY
-  storage().setItem(key, JSON.stringify(ids))
+function saveRevealedDrawsLocal(ids: readonly string[], profileKey: string): void {
+  saveRevealedDraws(storage(), ids, namespaceFromProfileKey(profileKey))
 }
 
 function currentProfile(profileKey: string): GuestProfile | null {
@@ -161,7 +153,7 @@ export function GuestProductRuntime() {
     if (!profileKey) return
     const namespace = namespaceFromProfileKey(profileKey)
 
-    setRevealedDraws(loadRevealedDraws(profileKey))
+    setRevealedDraws(loadRevealedDrawsLocal(profileKey))
 
     const profile = currentProfile(profileKey)
     if (!profile) return
@@ -292,7 +284,7 @@ export function GuestProductRuntime() {
   const dismissDraw = (drawId: string) => {
     setRevealedDraws((current) => {
       const next = current.includes(drawId) ? current : [...current, drawId]
-      if (profileKey) saveRevealedDraws(next, profileKey)
+      if (profileKey) saveRevealedDrawsLocal(next, profileKey)
       return next
     })
   }
