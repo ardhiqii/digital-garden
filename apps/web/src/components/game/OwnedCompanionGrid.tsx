@@ -29,12 +29,14 @@ import { loadGuestProfile, saveGuestProfile, type GuestProfile } from '@/lib/gam
 import { PROTOTYPE_COMPANION_CATALOG } from '@/lib/game/companion-catalog'
 import { assignments, remainingAssignments } from '@/lib/game/repo-assignments'
 import { hatchEgg, pendingEggs } from '@/lib/game/companion-eggs'
+import { eggAccentFor } from '@/lib/game/egg-art'
 import { useViewerProfileKey } from '@/lib/sync/use-viewer-profile-key'
 import { EggHatch } from '@/components/game/EggHatch'
 // Client-safe: neither of these reaches `node:fs`, which is the whole reason a tile can
 // resolve its own companion instead of receiving one server-rendered sprite for all of them.
 import RemoteSprite from '@/components/game/RemoteSprite'
 import { resolveCompanionSprite } from '@/lib/game/companion-sprite'
+import { EggShell } from '@/components/game/EggShell'
 
 export interface OwnedCompanionGridProps {
   /**
@@ -46,53 +48,41 @@ export interface OwnedCompanionGridProps {
    * route rather than just this page, and `client-bundle-safety.test.ts` fails
    * first to say so. Importing a sprite here would break the whole app; receiving
    * one as a prop keeps the client bundle free of Node built-ins.
+   *
+   * `EggShell` is NOT passed in, because it imports nothing and is safe to render
+   * here — which is what lets each egg take its own species accent.
    */
   sprite: ReactNode
-  /** The unopened-egg shell, also server-rendered, for the same reason. */
-  eggSprite: ReactNode
 }
 
-/** How many times the reveal has been asked for, keyed by egg. */
-type HatchPhase = 'closed' | 'opening'
-
-/** One unopened egg. Holds only the local "am I opening" state. */
-function EggTile({
-  eggSprite,
-  companionId,
-  onHatched,
-}: {
-  eggSprite: ReactNode
+/** The egg whose overlay is open, if any. */
+interface HatchingEgg {
+  drawId: string
   companionId: string
-  onHatched: () => void
-}) {
-  const [phase, setPhase] = useState<HatchPhase>('closed')
+  name: string
+}
+
+/** One unopened egg. A plain button: the reveal is owned by the grid, not by the tile. */
+function EggTile({ companionId, onOpen }: { companionId: string; onOpen: () => void }) {
+  const accent = eggAccentFor(companionId)
   const definition = PROTOTYPE_COMPANION_CATALOG.get(companionId)
 
-  if (phase === 'closed') {
-    return (
-      <button
-        type="button"
-        onClick={() => setPhase('opening')}
-        aria-label="Open this egg"
-        className="transition-transform hover:scale-105"
-      >
-        {eggSprite}
-      </button>
-    )
-  }
-
   return (
-    <EggHatch
-      companionId={companionId}
-      companionName={definition?.name ?? companionId}
-      onHatched={onHatched}
-    />
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`Open the ${definition?.name ?? companionId} egg`}
+      className="transition-transform hover:scale-105 focus:outline-none"
+    >
+      <EggShell shell={accent} size={96} />
+    </button>
   )
 }
 
-export function OwnedCompanionGrid({ sprite, eggSprite }: OwnedCompanionGridProps) {
+export function OwnedCompanionGrid({ sprite }: OwnedCompanionGridProps) {
   const [profile, setProfile] = useState<GuestProfile | null>(null)
   const [ready, setReady] = useState(false)
+  const [hatching, setHatching] = useState<HatchingEgg | null>(null)
   const profileKey = useViewerProfileKey()
 
   const read = useCallback(() => {
@@ -182,9 +172,15 @@ export function OwnedCompanionGrid({ sprite, eggSprite }: OwnedCompanionGridProp
                 style={{ borderColor: 'var(--accent)', background: 'var(--paper-raised)' }}
               >
                 <EggTile
-                  eggSprite={eggSprite}
                   companionId={egg.companionId}
-                  onHatched={() => openEgg(egg.drawId)}
+                  onOpen={() =>
+                    setHatching({
+                      drawId: egg.drawId,
+                      companionId: egg.companionId,
+                      name:
+                        PROTOTYPE_COMPANION_CATALOG.get(egg.companionId)?.name ?? egg.companionId,
+                    })
+                  }
                 />
               </li>
             ))}
@@ -289,6 +285,20 @@ export function OwnedCompanionGrid({ sprite, eggSprite }: OwnedCompanionGridProp
             })}
           </ul>
         </>
+      )}
+
+      {/* The overlay is rendered by the GRID, not by the egg's own tile, because
+          `onHatched` removes the egg from the list and would take its tile with it —
+          unmounting the reveal half a second into the spin. Owned here, it survives the
+          commit that empties its own tile. */}
+      {hatching && (
+        <EggHatch
+          drawId={hatching.drawId}
+          companionId={hatching.companionId}
+          companionName={hatching.name}
+          onHatched={() => openEgg(hatching.drawId)}
+          onClose={() => setHatching(null)}
+        />
       )}
     </>
   )

@@ -23,6 +23,7 @@ import { useEffect, useState } from 'react'
 import { GUEST_PROFILE_STORAGE_KEY, loadGuestProfile, saveGuestProfile } from '@/lib/game/guest-profile'
 import {
   browserProductStorage,
+  ensureBrowserGuestProfile,
   loadBrowserEncounters,
   loadBrowserLedger,
   loadRevealedDraws,
@@ -30,6 +31,9 @@ import {
   saveBrowserLedger,
   saveRevealedDraws,
 } from '@/lib/game/product-browser-storage'
+import { PROTOTYPE_COMPANION_CATALOG } from '@/lib/game/companion-catalog'
+import { claimDailyDraw, isDailyDrawDue } from '@/lib/game/daily-draw'
+import { layEggs } from '@/lib/game/companion-eggs'
 import { planGuestMigration } from '@/lib/game/guest-migration'
 import { namespaceFromProfileKey } from '@/lib/sync/viewer-profile-key'
 
@@ -43,6 +47,63 @@ export interface ViewerSession {
 }
 
 let inFlight: Promise<ViewerSession | null> | null = null
+
+/**
+ * Make sure the viewer has a profile, and claim today's draw for showing up.
+ *
+ * WHY THIS IS HERE AND NOT IN `/write`: the draw used to be claimed inside
+ * `GuestProductRuntime`, which is mounted on exactly one route. So the daily reward for
+ * "coming back" only existed for a user who happened to open the editor — and a user who
+ * landed on `/companions`, the page that LISTS the eggs, found no egg, no badge, and no
+ * profile at all. Measured: a fresh browser on `/companions` had nothing; one visit to
+ * `/write` produced the egg. Landing on the wrong page decided whether the day counted,
+ * which is the same defect the guest import had before it moved to this resolver.
+ *
+ * This runs on every route because the navbar calls `startViewerSession`, and it runs
+ * before any surface is handed the key, so no reader can see the pre-draw state.
+ *
+ * Idempotent twice over: `ensureBrowserGuestProfile` returns the existing profile, and
+ * `claimDailyDraw` refuses a day already in `processedTriggerIds`. A replay is a no-op
+ * rather than a second egg.
+ */
+function ensureViewerHasProfileAndDailyDraw(profileKey: string): void {
+  if (typeof window === 'undefined') return
+  // NO signed-out guard here, deliberately. `namespaceFromProfileKey` returns undefined
+  // for the guest key, which is exactly right: a signed-out visitor is the DEFAULT case,
+  // and it is the one that must still get a profile and a daily egg. The guard belongs in
+  // the migration, which has no account to import into; the draw has no such problem.
+  try {
+    const storage = browserProductStorage()
+    const namespace = namespaceFromProfileKey(profileKey)
+    const profile = ensureBrowserGuestProfile(
+      storage,
+      PROTOTYPE_COMPANION_CATALOG.list()[0].id,
+      namespace,
+    )
+
+    const encounters = loadBrowserEncounters(storage, namespace)
+    if (!isDailyDrawDue(encounters, new Date())) return
+
+    const claimed = claimDailyDraw(
+      encounters,
+      new Date(),
+      PROTOTYPE_COMPANION_CATALOG,
+      profile.collection.map((entry) => entry.companionId),
+    )
+    if (!claimed.claimed) return
+
+    saveBrowserEncounters(storage, claimed.state, namespace)
+    // The draw becomes an EGG, not a collection entry, so an unhatched companion does
+    // not count toward the assignment bound.
+    const withEggs = layEggs(profile, claimed.newDraws, new Date().toISOString())
+    saveGuestProfile(storage, withEggs, profileKey)
+    // Tells the navbar badge and every mounted runtime that the inventory changed.
+    window.dispatchEvent(new Event('terrarium:guest-profile-updated'))
+  } catch {
+    // A browser that refuses storage gets no draw. That is the honest result, and it is
+    // better than a thrown error taking down the navbar on every page.
+  }
+}
 
 /**
  * Carry the signed-out encounter state into the account namespace.
@@ -191,6 +252,9 @@ function fetchSession(): Promise<ViewerSession | null> {
       const profileKey = record.profileKey
       // Before anyone is handed this key.
       migrateGuestProfileIntoAccount(profileKey)
+      // After the import, never before: a signed-out guest who already claimed today
+      // must not be handed a second egg by the move into their account.
+      ensureViewerHasProfileAndDailyDraw(profileKey)
       return {
         signedIn: record.signedIn === true,
         handle: typeof record.handle === 'string' ? record.handle : null,

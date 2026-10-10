@@ -15,8 +15,6 @@ import {
   type EncounterSignals,
 } from '@/lib/game/encounters'
 import { PROTOTYPE_COMPANION_CATALOG } from '@/lib/game/companion-catalog'
-import { claimDailyDraw, isDailyDrawDue } from '@/lib/game/daily-draw'
-import { layEggs } from '@/lib/game/companion-eggs'
 import {
     createProductState,
     applyProductEvents,
@@ -47,7 +45,6 @@ import {
   saveBrowserLedger,
   saveRevealedDraws,
 } from '@/lib/game/product-browser-storage'
-import { GUEST_PROFILE_STORAGE_KEY } from '@/lib/game/guest-profile'
 
 const PROFILE_EVENT = 'terrarium:guest-profile-updated'
 const LEGACY_PROFILE_EVENT = 'digital-garden:guest-profile-updated'
@@ -162,35 +159,14 @@ export function GuestProductRuntime() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setState(createProductState(profile, loadLedger(namespace), loadEncounters(namespace), PROTOTYPE_COMPANION_CATALOG))
 
-    // THE DAILY DRAW. Claimed on arrival, once per local calendar day, gated by
-      // the day id being in `processedTriggerIds`. Deliberately here rather than
-      // inside the scan handler: a user who opens the app but has no folder
-      // mounted, or whose folder is unchanged, still gets their companion for
-      // showing up. Hooking it to a scan would make the reward conditional on
-      // writing, which is the opposite of what a daily login reward is for.
-      {
-        const encounters = loadEncounters(namespace)
-        if (isDailyDrawDue(encounters, new Date())) {
-          const claimed = claimDailyDraw(
-            encounters,
-            new Date(),
-            PROTOTYPE_COMPANION_CATALOG,
-            profile.collection.map((entry) => entry.companionId),
-          )
-          if (claimed.claimed) {
-            saveEncounters(claimed.state, namespace)
-            // The draw becomes an EGG, not a collection entry. A draw used to land
-            // straight in the collection and announce itself in a panel the user
-            // read; an egg is the same event with the user present for it. The
-            // companion joins the collection when the egg is opened, so an
-            // unhatched companion does not count toward the assignment bound.
-            const withEggs = layEggs(profile, claimed.newDraws, new Date().toISOString())
-            saveGuestProfile(storage(), withEggs, profileKey)
-            window.dispatchEvent(new Event(PROFILE_EVENT))
-            setState(createProductState(withEggs, loadLedger(namespace), claimed.state, PROTOTYPE_COMPANION_CATALOG))
-          }
-        }
-      }
+    // THE DAILY DRAW used to be claimed here, which is why it only ever happened on
+    // this route. It now runs in the shared session resolver
+    // (`ensureViewerHasProfileAndDailyDraw`), which every route reaches through the
+    // navbar — a user who lands on /companions, the page that lists the eggs, used to
+    // find no egg, no badge and no profile at all.
+    //
+    // The profile is also guaranteed to exist by that resolver now, so `currentProfile`
+    // above is always populated on a page that reached this point.
 
     const onProfileUpdated = () => {
       const nextProfile = currentProfile(profileKey)
