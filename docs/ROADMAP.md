@@ -212,6 +212,24 @@ Pichu, Pikachu, Electabuzz, and Electivire. This must be replaced by provider
 configurations that declare real families and valid evolution paths before the
 collection is considered final.
 
+### Companion catalog and per-tile sprites (shipped)
+
+The daily draw was effectively a two-day feature. With two catalog entries, a viewer who
+owned both received a duplicate on every later day, and a duplicate pays only Essence,
+which the interface does not surface anywhere. Two changes fixed it: the draw now prefers
+entries the viewer does not own, and the catalog holds twelve.
+
+Measured over 120 simulated days: a viewer owning only the starter went from a companion on
+**32.5%** of days to **100%**, and the runway went from **two days to twelve**. The rule
+falls back to the full table once everything is owned, which is what keeps duplicates (and
+Essence) reachable at all.
+
+Collection tiles also rendered one shared sprite, the garden stage's sporeling, for every
+companion: a card labelled "Pikachu family" showed a grass lizard. The grid is a client
+component and the sprite component reaches `node:fs`, so a single server-rendered node had
+been threaded through and reused. Tiles now resolve their own companion's sprite through a
+client-safe resolver, with each sprite's dimensions measured from the file itself.
+
 ## Delivery order
 
 | Phase | Goal | Status |
