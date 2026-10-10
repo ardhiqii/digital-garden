@@ -628,6 +628,20 @@ One draw is granted for opening the app on a new **local** calendar day.
   second companion.
 - The daily draw is an addition to the activity meter in this section, not a
   replacement for it.
+- **A draw prefers what the user does not own.** Entries already in the collection are
+  removed from the selection pool while any unowned entry remains, so a daily draw yields
+  a companion instead of a duplicate. An owned result is not a re-roll, it is a
+  non-event: `isDuplicate` pays only Essence, and Essence is not yet visible or
+  spendable, so the day reads to the user as "nothing happened".
+- **The pool is recomputed per draw, not per batch.** A single trigger worth two draws
+  must not be able to select the same companion twice.
+- **Once every entry is owned the pool falls back to the full table.** That fallback is
+  the only path by which duplicates, and therefore Essence, stay reachable at all, so it
+  is load-bearing rather than defensive.
+- **The runway is the catalog size.** With the prototype's twelve entries, a user owning
+  only the starter gets twelve productive days (measured: eleven further draws, then the
+  collection completes at 12/12). Extending the reward means growing the catalog, not
+  changing the rule. Every new entry also needs a measured sprite size; see section 7.
 
 ### 6.3 Dressing a repository
 
@@ -697,6 +711,26 @@ companion collection is considered final.
 PokeAPI is acceptable for local prototyping. Pokémon names, designs, and sprites
 are not a commercial asset license. A commercial marketplace must use artist
 assets with explicit licenses, not Pokémon assets.
+
+### 7.1 Per-companion sprites in the collection
+
+A collection tile renders the sprite of the companion it names, resolved from that
+companion's current form at the tile's xp.
+
+- **Resolution must be client-safe.** The collection grid is a `'use client'` component,
+  and `CreatureSprite` reaches `node:fs` transitively; importing it there fails the entire
+  build, not just that page. Tiles therefore resolve through `lib/game/companion-sprite.ts`,
+  which depends only on `sprites/pokeapi-pure` (committed JSON plus two URL builders, no
+  filesystem and no network) and the catalog's own progression maths.
+- **Sprite dimensions are measured, never assumed.** `RemoteSprite` sets explicit
+  width/height and DESIGN.md 2.4 permits integer scaling only, so a wrong size distorts
+  pixel art rather than nudging layout. The animated sprites run from 37x38 to 102x84; the
+  static PNGs are all 96x96, which is why one box can serve both variants.
+- **A catalog form without a measured size fails a test** rather than rendering stretched.
+- **The form comes from the catalog's own progression resolver**, so a tile cannot
+  disagree with the progress panel about which form a companion is in.
+- The tile shows the base form at xp 0; passing xp would show the evolved form. The
+  per-companion xp lives in the server-side product state this surface does not read.
 
 ## 8. Marketplace direction
 

@@ -222,6 +222,28 @@ function chooseWeighted(
   return weights[weights.length - 1]
 }
 
+/**
+ * Prefer companions the viewer does not have yet.
+ *
+ * WHY THIS EXISTS: the draw picked from every catalog entry, and an already-owned
+ * entry is not a re-roll, it is a NON-EVENT. `isDuplicate` routes it to Essence, which
+ * the viewer cannot see or spend, so the day reads as "nothing happened". Measured
+ * against the two-entry prototype catalog, a viewer owning only the starter got an egg
+ * on 32.5% of days and nothing on the other 67.5%. Own the whole catalog and the reward
+ * stops producing eggs entirely -- a draw still runs, it just never yields anything.
+ *
+ * Once every entry is owned the pool falls back to the full table. That fallback is the
+ * only thing that makes duplicates (and their Essence) reachable at all, so it must not
+ * be removed: without it a complete collection would have no draw behaviour left.
+ */
+function selectableWeights(
+  weights: readonly EncounterWeightBreakdown[],
+  owned: ReadonlySet<string>,
+): readonly EncounterWeightBreakdown[] {
+  const fresh = weights.filter((weight) => !owned.has(weight.companionId))
+  return fresh.length > 0 ? fresh : weights
+}
+
 function drawId(config: EncounterConfig, sequence: number): string {
   return `${config.profileKey}:${sequence}`
 }
@@ -274,9 +296,13 @@ export function advanceEncounter(
       continue
     }
 
-    const selectedWeight = chooseWeighted(weights, `${trigger.seed}:${sequence}`)
+    // Recomputed per draw, not hoisted: `owned` grows as this batch selects, so a
+    // second draw in the same batch cannot hand back the companion the first just took.
+    const pool = selectableWeights(weights, owned)
+    const selectedWeight = chooseWeighted(pool, `${trigger.seed}:${sequence}`)
     const selected = catalog.get(selectedWeight.companionId)
     if (!selected) throw new Error(`catalog is missing ${selectedWeight.companionId}`)
+    // Still a real duplicate when the pool fell back to the full table.
     const isDuplicate = owned.has(selected.id)
     const essenceAwarded = isDuplicate ? duplicateToFamilyEssence(selected) : 0
     const draw: PersistedEncounterDraw = {
@@ -288,7 +314,10 @@ export function advanceEncounter(
       selectedFamilyId: selected.familyId,
       isDuplicate,
       essenceAwarded,
-      weights,
+      // The pool this draw actually chose from. Persisting the full table would claim
+      // candidates that were not selectable, and the snapshot validators read these ids
+      // as "companions this draw knows about", which the narrowed pool still satisfies.
+      weights: pool,
     }
     draws.push(draw)
     newDraws.push(draw)

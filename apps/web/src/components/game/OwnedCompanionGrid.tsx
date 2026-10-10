@@ -31,6 +31,10 @@ import { assignments, remainingAssignments } from '@/lib/game/repo-assignments'
 import { hatchEgg, pendingEggs } from '@/lib/game/companion-eggs'
 import { useViewerProfileKey } from '@/lib/sync/use-viewer-profile-key'
 import { EggHatch } from '@/components/game/EggHatch'
+// Client-safe: neither of these reaches `node:fs`, which is the whole reason a tile can
+// resolve its own companion instead of receiving one server-rendered sprite for all of them.
+import RemoteSprite from '@/components/game/RemoteSprite'
+import { resolveCompanionSprite } from '@/lib/game/companion-sprite'
 
 export interface OwnedCompanionGridProps {
   /**
@@ -207,6 +211,10 @@ export function OwnedCompanionGrid({ sprite, eggSprite }: OwnedCompanionGridProp
           <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {collection.map((entry) => {
               const definition = PROTOTYPE_COMPANION_CATALOG.get(entry.companionId)
+              // This companion's own sprite. Resolved at xp 0 -- the tile shows the
+              // creature's identity, and per-companion XP lives in the server-side product
+              // state this surface does not read. Pass an xp later to show the evolved form.
+              const resolvedSprite = definition ? resolveCompanionSprite(definition) : null
               const assignment = dressed.find((a) => a.referenceId === entry.referenceId)
               const isActive = entry.companionId === profile?.activeCompanionId
               return (
@@ -215,7 +223,26 @@ export function OwnedCompanionGrid({ sprite, eggSprite }: OwnedCompanionGridProp
                   className="border p-3"
                   style={{ borderColor: 'var(--rule)', background: 'var(--paper-raised)' }}
                 >
-                  <div className="mb-2">{sprite}</div>
+                  {/*
+                    Per-tile sprite. This rendered the single `sprite` prop for every entry,
+                    which is the garden stage's sporeling: "Pikachu family" and "Abra line"
+                    showed the same grass lizard, and the catalog's per-companion assets were
+                    never used here at all. The prop stays as the fallback for a companion the
+                    resolver cannot size, so an unmeasured entry degrades to the previous
+                    behaviour rather than a broken image.
+                  */}
+                  <div className="mb-2">
+                    {resolvedSprite ? (
+                      <RemoteSprite
+                        resolved={resolvedSprite}
+                        scale={2}
+                        alt={definition?.name ?? entry.companionId}
+                        stage={entry.companionId}
+                      />
+                    ) : (
+                      sprite
+                    )}
+                  </div>
                   <p className="font-ui text-sm font-medium">
                     {definition?.name ?? entry.companionId}
                   </p>
