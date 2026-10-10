@@ -80,7 +80,21 @@ export function ProductActivityPanel({
         </p>
       </div>
 
+      {/*
+        Every "xp to next" on this panel names WHOSE ladder it is.
+
+        WHAT WENT WRONG: three different ladders rendered here as unlabelled fractions
+        of the same total XP — the viewer's RANK (titles.ts, 500 to Sprout), the
+        companion's own FORM (the catalog progression, 100 to Charged), and, on other
+        surfaces, the garden creature's STAGE (1500 to Mossling). A reviewer read this
+        panel and reported "two different names, two different thresholds, and a
+        progress bar that disagrees with its own label", which is exactly what it looked
+        like. The numbers were never wrong; nothing said what they belonged to. The rank
+        line was the worst offender because it sat directly under the companion's name,
+        so it read as the companion's rank.
+      */}
       <p className="font-data mt-2 text-xs" style={{ color: 'var(--ink-muted)' }}>
+        Your rank:{' '}
         <span style={{ color: 'var(--accent)' }}>{title.title.name}</span>
         {title.nextTitle
           ? ` · ${title.xpIntoTier.toLocaleString()} / ${title.xpForNextTier?.toLocaleString()} xp to ${title.nextTitle.name}`
@@ -90,13 +104,13 @@ export function ProductActivityPanel({
       <dl className="mt-6 grid gap-4 sm:grid-cols-3">
         <div>
           <dt className="font-data text-xs uppercase tracking-wide" style={{ color: 'var(--ink-muted)' }}>
-            Progression
+            This companion
           </dt>
           <dd className="font-ui mt-1 text-sm font-medium">{progressionName}</dd>
         </div>
         <div>
           <dt className="font-data text-xs uppercase tracking-wide" style={{ color: 'var(--ink-muted)' }}>
-            XP
+            Companion XP
           </dt>
           <dd className="font-data mt-1 text-sm">
             {(activeCompanion?.xp ?? 0).toLocaleString()} xp
@@ -114,7 +128,16 @@ export function ProductActivityPanel({
 
       <div className="mt-6">
         <div className="font-data flex items-baseline justify-between gap-3 text-xs">
-          <span style={{ color: 'var(--ink-muted)' }}>Progress to next form</span>
+          <span style={{ color: 'var(--ink-muted)' }}>
+            {/*
+              Named, because "to next form" on its own sat beside an unlabelled rank
+              fraction and a stage threshold, and there was no way to tell which ladder
+              either number belonged to. This one belongs to the companion above.
+            */}
+            {progression?.nextStep
+              ? `Next form (this companion): ${progression.nextStep.name}`
+              : 'Next form (this companion)'}
+          </span>
           <span style={{ color: 'var(--ink-muted)' }}>
             {progression?.xpForNextStep === null
               ? 'complete'
@@ -127,7 +150,7 @@ export function ProductActivityPanel({
           className="mt-2 h-2 w-full"
           style={{ background: 'var(--rule)' }}
           role="progressbar"
-          aria-label="Progress to next form"
+          aria-label="Progress to this companion's next form"
           aria-valuenow={xpProgress}
           aria-valuemin={0}
           aria-valuemax={100}
