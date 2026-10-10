@@ -13,7 +13,12 @@
  * own pure progression maths, so a `'use client'` tile can resolve its own companion without
  * dragging a Node built-in into the bundle.
  */
-import { resolveCompanionProgression, type CompanionDefinition, type CompanionForm } from './companion-catalog'
+import {
+  PROTOTYPE_COMPANION_CATALOG,
+  resolveCompanionProgression,
+  type CompanionDefinition,
+  type CompanionForm,
+} from './companion-catalog'
 import { buildSpriteUrl, buildStaticSpriteUrl, type ResolvedSprite } from './sprites/pokeapi-pure'
 
 /**
@@ -111,4 +116,39 @@ export function resolveCompanionSprite(
 /** Exposed for the test that keeps the measured table in step with the catalog. */
 export function hasMeasuredSize(id: number): boolean {
   return id in ANIMATED_SIZE
+}
+
+/**
+ * Bare URL pair for a catalog companion, for callers that render their own element.
+ *
+ * WHY BOTH THIS AND `resolveCompanionSprite` EXIST: they serve different consumers and were
+ * written on separate branches that both landed. The hatch overlay animates the freshly
+ * hatched companion with its own markup and only needs URLs; a collection tile hands a fully
+ * resolved sprite -- with a measured box for `RemoteSprite` -- and needs dimensions too.
+ * Folding one into the other would either lose the measured box or make the overlay carry
+ * sizing it does not use.
+ *
+ * Both go through `spriteIdForForm`, so there is still exactly one place that turns a form
+ * into a PokeAPI id, and a malformed id yields null here rather than an `<img>` pointing at
+ * `NaN` that renders as a broken-image icon.
+ */
+export interface CompanionSprite {
+  /** The animated GIF, when the catalog marks this form as animated. */
+  animated: string | null
+  /** The still frame, used for `prefers-reduced-motion` and as the only option for static forms. */
+  still: string
+}
+
+export function companionSprite(companionId: string): CompanionSprite | null {
+  const definition = PROTOTYPE_COMPANION_CATALOG.get(companionId)
+  const form = definition?.forms[0]
+  if (!form) return null
+
+  const id = spriteIdForForm(form)
+  if (id === null) return null
+
+  return {
+    animated: form.animatedAsset ? buildSpriteUrl(id) : null,
+    still: buildStaticSpriteUrl(id),
+  }
 }

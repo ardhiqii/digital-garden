@@ -146,6 +146,45 @@ Sprites must land on exact integer scale factors or they turn to mush.
 
 Base sprite grid: **32x32**, displayed at 3x (96px) in the specimen plate and 2x (64px) in the footer strip.
 
+### 2.5 The egg and the hatch
+
+The egg is the one sprite the user is meant to *handle*, so it gets its own art rules.
+
+- **A pixel sprite, authored as a grid.** `lib/game/egg-art.ts` holds the shell as 20 rows of 16
+  characters, one block each, rendered as one `<rect>` per pixel on a 16x20 viewBox. Curvature is
+  **stepped**, never smooth: a path with curves renders as a vector shape at any size and stops
+  being pixel art. The source is meant to be read as a picture, so it can be edited by looking at it.
+- **One-pixel outline all the way round, and it is `--sprite-outline`.** Not a hex. This art comes
+  from a dark outline on a light ground, and the app has a dark theme where a near-black outline is
+  invisible against `--paper-raised`. The token already flips per theme for every other sprite, so
+  the egg inherits that rather than needing a second rule.
+- **Flat shading, no dithering.** Cream body, a highlight on the upper left where the light is, and
+  one shading tone wrapping the lower right.
+- **The species accent belongs to the crack and the burst, never the shell.** The colour is the thing
+  inside showing through, and it is the payoff of the reveal. Two eggs of one species look identical
+  until they open, which is the point.
+- **Neutral, not themed, body colours.** The shell palette is fixed cream and tan so it reads the same
+  in both themes; only the outline follows the theme.
+
+The hatch:
+
+- **Opens as a modal**, on a plain panel with a lot of empty space, framed top and bottom by the same
+  sprite repeated and faded to 7%. The reference's frame is made of the thing it frames. Inline, the
+  egg competes with the inventory grid and reads as a thumbnail rather than a specimen.
+- **The crack is one zigzag path with a moving window over it**, not one path per tap. It grows
+  outward from the middle of the shell until it spans top to bottom, which is what the reveal is
+  describing. `crackCountFor` gives each egg 3–5 taps, derived from the egg's own id so a re-render
+  cannot heal a part-cracked shell.
+- **The user drives the cracking; timers drive everything after.** Each tap is theirs, and the commit
+  lands on the tap that breaks the shell. The burst, the light and the spin are on timers because a
+  reduced-motion visitor gets no CSS animation at all, so an animation-end handler would never fire
+  and the reveal would stall half-emerged.
+- **The spin lands on a whole number of turns** (1080°) so removing the animation is a stop, not a
+  snap.
+- **The overlay is owned by the grid, not by the egg's tile.** `onHatched` removes the egg from the
+  profile, which empties its own `<li>`; owned there, the overlay would unmount mid-reveal. This is a
+  layout decision with a behavioural consequence, not a stylistic one.
+
 ---
 
 ## 3. Companion system
